@@ -3,11 +3,13 @@ import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
 import ContactList from './components/ContactList';
 import FavoritesList from './components/FavoritesList';
+import ChangelogList from './components/ChangelogList';
 import ChatWindow from './components/ChatWindow';
+import ChangelogView from './components/ChangelogView';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
-import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS } from './constants';
-import { AppSettings, Persona, ChatGroup, Favorite, Message } from './types';
+import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS } from './constants';
+import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry } from './types';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
@@ -31,7 +33,7 @@ const App: React.FC = () => {
   const [adminCredentials, setAdminCredentials] = useState({ username: 'admin', password: '123456' });
 
   // Sidebar Tab State
-  const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites'>('chats');
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog'>('chats');
 
   // About Modal State
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
@@ -46,6 +48,10 @@ const App: React.FC = () => {
   // Manage Favorites State
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<string | null>(null);
+
+  // Manage Changelogs State
+  const [changelogs, setChangelogs] = useState<ChangelogEntry[]>(MOCK_CHANGELOGS);
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(MOCK_CHANGELOGS.length > 0 ? MOCK_CHANGELOGS[0].id : null);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,6 +68,7 @@ const App: React.FC = () => {
 
   // Derived Active Content
   let activeContent = null;
+  let activeLog = null;
 
   if (activeSidebarTab === 'favorites') {
       if (selectedFavoriteId) {
@@ -80,6 +87,8 @@ const App: React.FC = () => {
              } as unknown as ChatGroup;
           }
       }
+  } else if (activeSidebarTab === 'changelog') {
+      activeLog = changelogs.find(l => l.id === selectedLogId);
   } else {
       activeContent = chats.find(c => c.id === selectedChatId);
   }
@@ -166,6 +175,11 @@ const App: React.FC = () => {
       setIsMobileChatOpen(true);
   };
 
+  const handleSelectLog = (id: string) => {
+      setSelectedLogId(id);
+      setIsMobileChatOpen(true);
+  };
+
   const handleAddToFavorites = (messages: Message[], sourceName: string) => {
       const isBatch = messages.length > 1;
       const previewText = messages.map(m => m.content).join(' ').substring(0, 50) + '...';
@@ -189,6 +203,28 @@ const App: React.FC = () => {
           setFavorites(prev => prev.filter(f => f.id !== id));
           if (selectedFavoriteId === id) setSelectedFavoriteId(null);
       }
+  };
+
+  const handleAddLog = () => {
+    const newLog: ChangelogEntry = {
+        id: `log_${Date.now()}`,
+        version: 'v1.X.X',
+        date: new Date().toISOString().split('T')[0],
+        title: '新版本发布',
+        content: '在此输入更新内容...'
+    };
+    setChangelogs([newLog, ...changelogs]);
+    setSelectedLogId(newLog.id);
+    setIsMobileChatOpen(true);
+  };
+
+  const handleUpdateLog = (updatedLog: ChangelogEntry) => {
+    setChangelogs(prev => prev.map(l => l.id === updatedLog.id ? updatedLog : l));
+  };
+
+  const handleDeleteLog = (id: string) => {
+      setChangelogs(prev => prev.filter(l => l.id !== id));
+      if (selectedLogId === id) setSelectedLogId(null);
   };
 
   const handleLogout = () => {
@@ -241,6 +277,18 @@ const App: React.FC = () => {
                   onSearchChange={setSearchQuery}
                />
            )}
+
+           {activeSidebarTab === 'changelog' && (
+               <ChangelogList 
+                  logs={changelogs}
+                  selectedLogId={selectedLogId}
+                  onSelectLog={handleSelectLog}
+                  onAddLog={handleAddLog}
+                  searchQuery={searchQuery}
+                  onSearchChange={setSearchQuery}
+                  isAuthenticated={isAuthenticated}
+               />
+           )}
        </div>
 
        {/* Chat Window / Content - Full screen on mobile if chat is open */}
@@ -248,7 +296,36 @@ const App: React.FC = () => {
           ${isMobileChatOpen ? 'flex fixed inset-0 z-30 bg-white' : 'hidden'} 
           md:flex md:static md:flex-1 h-full w-full
        `}>
-         {activeContent ? (
+         {activeSidebarTab === 'changelog' ? (
+             activeLog ? (
+                 <>
+                   {/* Mobile Back Button Wrapper for ChangelogView */}
+                    <div className="flex-1 h-full relative flex flex-col">
+                         <div className="md:hidden absolute top-3 left-4 z-50">
+                             <button 
+                                onClick={() => setIsMobileChatOpen(false)}
+                                className="p-1.5 -ml-1 text-gray-500 hover:text-gray-900 rounded-full bg-white/50 backdrop-blur-sm shadow-sm"
+                             >
+                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                             </button>
+                         </div>
+                         <ChangelogView 
+                            log={activeLog}
+                            onUpdate={handleUpdateLog}
+                            onDelete={handleDeleteLog}
+                            isAuthenticated={isAuthenticated}
+                         />
+                    </div>
+                 </>
+             ) : (
+                <div className="hidden md:flex flex-1 items-center justify-center bg-[#f5f5f5] text-gray-400">
+                    <div className="text-center">
+                        <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        <p>请选择左侧日志查看详情</p>
+                    </div>
+                </div>
+             )
+         ) : activeContent ? (
              <ChatWindow 
                 key={activeContent.id} 
                 chat={activeContent} 
