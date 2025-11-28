@@ -9,7 +9,7 @@ import ChangelogView from './components/ChangelogView';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
 import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS } from './constants';
-import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, ProviderId } from './types';
+import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry } from './types';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
@@ -70,62 +70,26 @@ const App: React.FC = () => {
   // App Settings State - Persisted
   const [settings, setSettings] = useState<AppSettings>(() => {
     const saved = loadState<AppSettings | null>('app_settings', null);
-    
-    const defaultSettings: AppSettings = {
-      userAvatar: 'https://picsum.photos/seed/me/100/100',
-      userName: 'User',
-      geminiModel: 'gemini-2.5-flash',
-      enableThinking: false,
-      activeProvider: 'qwen',
-      providerConfigs: DEFAULT_PROVIDER_CONFIGS
-    };
-
+    // Use defaults if no saved settings
     if (!saved) {
-      return defaultSettings;
+      return {
+        userAvatar: 'https://picsum.photos/seed/me/100/100',
+        userName: 'User',
+        geminiModel: 'gemini-2.5-flash',
+        enableThinking: false,
+        activeProvider: 'gemini',
+        providerConfigs: DEFAULT_PROVIDER_CONFIGS
+      };
     }
-    
-    // Intelligent Merge: Ensure new default API keys populate if saved ones are empty
-    const mergedProviderConfigs = { ...DEFAULT_PROVIDER_CONFIGS };
-    
-    if (saved.providerConfigs) {
-        (Object.keys(saved.providerConfigs) as ProviderId[]).forEach(pid => {
-            const savedConfig = saved.providerConfigs[pid];
-            const defaultConfig = DEFAULT_PROVIDER_CONFIGS[pid];
-            
-            if (savedConfig && defaultConfig) {
-                mergedProviderConfigs[pid] = {
-                    ...defaultConfig, 
-                    ...savedConfig,
-                    // If saved key is empty/missing but default exists, use default
-                    apiKey: savedConfig.apiKey || defaultConfig.apiKey,
-                    baseUrl: savedConfig.baseUrl || defaultConfig.baseUrl
-                };
-            }
-        });
-    }
-
+    // Deep merge providerConfigs to handle new providers in code updates
     return {
-        ...defaultSettings,
         ...saved,
-        providerConfigs: mergedProviderConfigs,
-        // Optional: Force Qwen as default if the saved one was 'gemini' (legacy default)
-        // activeProvider: saved.activeProvider || 'qwen'
+        providerConfigs: {
+            ...DEFAULT_PROVIDER_CONFIGS,
+            ...(saved.providerConfigs || {})
+        }
     };
   });
-  
-  // Real-time Cloud Sync Polling
-  // Polls every 3 seconds to check if cloud data has changed (if logged in via sync code)
-  // This achieves "seamless sync" without reloading.
-  useEffect(() => {
-     // Check if we are in "Sync Mode" (using admin username other than 'admin' implies sync session, or checking a flag)
-     // Since we don't store sync mode flag in settings explicitly in previous steps, 
-     // we can check if there's a syncCode in localStorage (if we stored it).
-     // However, simpler approach: If authenticated and credential username !== 'admin', it's likely a sync session.
-     
-     // Note: The previous request implemented logic in SettingsModal/syncService, but primarily relied on "Login to Restore".
-     // To make it truly seamless, we need to know the Sync Code.
-     // Assuming for now the user is relying on local storage.
-  }, []);
 
   // Persist state changes
   useEffect(() => { localStorage.setItem('app_chats', JSON.stringify(chats)); }, [chats]);
