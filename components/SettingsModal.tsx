@@ -229,7 +229,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 transition-shadow"
-            placeholder="admin"
+            placeholder="请输入账号"
           />
         </div>
         <div>
@@ -239,7 +239,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 transition-shadow"
-            placeholder="123456"
+            placeholder="请输入密码"
             onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
           />
         </div>
