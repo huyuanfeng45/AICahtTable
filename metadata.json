@@ -1,0 +1,5 @@
+{
+  "name": "AI Round Table",
+  "description": "A chat room where multiple AI personalities discuss and debate your questions using the Gemini API.",
+  "requestFramePermissions": []
+}
