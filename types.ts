@@ -105,4 +105,7 @@ export interface AppSettings {
   // New Multi-provider support
   activeProvider: ProviderId; // Default/Global provider
   providerConfigs: Record<ProviderId, ProviderConfig>;
+  
+  // Cloud Sync
+  syncCode?: string;
 }
