@@ -6,23 +6,16 @@ import FavoritesList from './components/FavoritesList';
 import ChatWindow from './components/ChatWindow';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
-import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS } from './constants';
+import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message } from './types';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
-一款基于 Google Gemini 等多模型驱动的 AI 群聊模拟器。
-
 主要功能：
-- 多角色扮演与混合协作
-- 支持 Gemini, DeepSeek, OpenAI 等多种模型
-- 聊天记录收藏与导出
-- 实时思维链 (Thinking) 展示
-
-更新日志：
-2025-05-20 v1.5.0: 新增 DeepSeek R1 支持
-2025-05-10 v1.2.0: 收藏夹功能上线
-2025-04-01 v1.0.0: 初始版本发布`;
+- 多模型混合协作 (Gemini, DeepSeek, OpenAI)
+- 角色扮演与群聊模拟
+- 收藏夹与导出功能
+- 实时思维链展示`;
 
 const App: React.FC = () => {
   // Default to the first chat (the AI group)
@@ -32,10 +25,6 @@ const App: React.FC = () => {
   // Mobile UI state
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   
-  // About/Version Intro Modal State
-  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  const [aboutContent, setAboutContent] = useState(INITIAL_ABOUT_CONTENT);
-  
   // Authentication State (Lifted from SettingsModal)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   // Admin Credentials State
@@ -43,6 +32,10 @@ const App: React.FC = () => {
 
   // Sidebar Tab State
   const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites'>('chats');
+
+  // About Modal State
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [aboutContent, setAboutContent] = useState(INITIAL_ABOUT_CONTENT);
 
   // Manage Chats State (Editable)
   const [chats, setChats] = useState<ChatGroup[]>(MOCK_CHATS);
