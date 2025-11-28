@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
 import ContactList from './components/ContactList';
@@ -19,17 +19,31 @@ const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 - 收藏夹与导出功能
 - 实时思维链展示`;
 
+// Persistence Helper
+function loadState<T>(key: string, defaultValue: T): T {
+  if (typeof window === 'undefined') return defaultValue;
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : defaultValue;
+  } catch (e) {
+    console.warn(`Error loading ${key}`, e);
+    return defaultValue;
+  }
+}
+
 const App: React.FC = () => {
   // Default to the first chat (the AI group)
-  const [selectedChatId, setSelectedChatId] = useState(MOCK_CHATS[0].id);
+  // We use functional initialization to load from localStorage if available
+  const [chats, setChats] = useState<ChatGroup[]>(() => loadState('app_chats', MOCK_CHATS));
+  const [selectedChatId, setSelectedChatId] = useState(chats.length > 0 ? chats[0].id : '');
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   // Mobile UI state
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   
-  // Authentication State (Lifted from SettingsModal)
+  // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  // Admin Credentials State
   const [adminCredentials, setAdminCredentials] = useState({ username: 'admin', password: '123456' });
 
   // Sidebar Tab State
@@ -39,32 +53,51 @@ const App: React.FC = () => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [aboutContent, setAboutContent] = useState(INITIAL_ABOUT_CONTENT);
 
-  // Manage Chats State (Editable)
-  const [chats, setChats] = useState<ChatGroup[]>(MOCK_CHATS);
-
   // Manage Personas State (Editable)
-  const [personas, setPersonas] = useState<Persona[]>(AI_PERSONAS);
+  const [personas, setPersonas] = useState<Persona[]>(() => loadState('app_personas', AI_PERSONAS));
 
   // Manage Favorites State
-  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [favorites, setFavorites] = useState<Favorite[]>(() => loadState('app_favorites', []));
   const [selectedFavoriteId, setSelectedFavoriteId] = useState<string | null>(null);
 
   // Manage Changelogs State
-  const [changelogs, setChangelogs] = useState<ChangelogEntry[]>(MOCK_CHANGELOGS);
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(MOCK_CHANGELOGS.length > 0 ? MOCK_CHANGELOGS[0].id : null);
+  const [changelogs, setChangelogs] = useState<ChangelogEntry[]>(() => loadState('app_changelogs', MOCK_CHANGELOGS));
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(changelogs.length > 0 ? changelogs[0].id : null);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
 
-  // App Settings State
-  const [settings, setSettings] = useState<AppSettings>({
-    userAvatar: 'https://picsum.photos/seed/me/100/100',
-    userName: 'User',
-    geminiModel: 'gemini-2.5-flash',
-    enableThinking: false,
-    activeProvider: 'gemini',
-    providerConfigs: DEFAULT_PROVIDER_CONFIGS
+  // App Settings State - Persisted
+  const [settings, setSettings] = useState<AppSettings>(() => {
+    const saved = loadState<AppSettings | null>('app_settings', null);
+    // Use defaults if no saved settings
+    if (!saved) {
+      return {
+        userAvatar: 'https://picsum.photos/seed/me/100/100',
+        userName: 'User',
+        geminiModel: 'gemini-2.5-flash',
+        enableThinking: false,
+        activeProvider: 'gemini',
+        providerConfigs: DEFAULT_PROVIDER_CONFIGS
+      };
+    }
+    // Deep merge providerConfigs to handle new providers in code updates
+    return {
+        ...saved,
+        providerConfigs: {
+            ...DEFAULT_PROVIDER_CONFIGS,
+            ...(saved.providerConfigs || {})
+        }
+    };
   });
+
+  // Persist state changes
+  useEffect(() => { localStorage.setItem('app_chats', JSON.stringify(chats)); }, [chats]);
+  useEffect(() => { localStorage.setItem('app_personas', JSON.stringify(personas)); }, [personas]);
+  useEffect(() => { localStorage.setItem('app_favorites', JSON.stringify(favorites)); }, [favorites]);
+  useEffect(() => { localStorage.setItem('app_changelogs', JSON.stringify(changelogs)); }, [changelogs]);
+  useEffect(() => { localStorage.setItem('app_settings', JSON.stringify(settings)); }, [settings]);
+
 
   // Derived Active Content
   let activeContent = null;

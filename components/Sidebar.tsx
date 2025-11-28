@@ -61,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userAvatar, onOpenSettings, activeTab
           </svg>
         </div>
 
-        {/* Changelog Icon */}
+        {/* Changelog Icon - Restored */}
         <div 
             className={`cursor-pointer relative group transition-colors ${activeTab === 'changelog' ? 'text-[#07c160]' : 'text-gray-400 hover:text-white'}`}
             onClick={() => onTabChange('changelog')}
