@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
 import ContactList from './components/ContactList';
@@ -11,7 +10,6 @@ import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
 import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry } from './types';
-import { SyncService } from './services/syncService';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
@@ -46,7 +44,7 @@ const App: React.FC = () => {
   
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminCredentials, setAdminCredentials] = useState(() => loadState('app_admin_creds', { username: 'admin', password: '123456' }));
+  const [adminCredentials, setAdminCredentials] = useState({ username: 'admin', password: '123456' });
 
   // Sidebar Tab State
   const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog'>('chats');
@@ -79,7 +77,7 @@ const App: React.FC = () => {
         userName: 'User',
         geminiModel: 'gemini-2.5-flash',
         enableThinking: false,
-        activeProvider: 'gemini',
+        activeProvider: 'qwen',
         providerConfigs: DEFAULT_PROVIDER_CONFIGS
       };
     }
@@ -92,12 +90,6 @@ const App: React.FC = () => {
         }
     };
   });
-  
-  // Sync State
-  const [isSyncing, setIsSyncing] = useState(false);
-  // Track the timestamp of the data we currently have to avoid overwriting newer cloud data with old local data
-  // or overwriting local edits with old cloud data.
-  const lastDataTimestampRef = useRef<number>(Date.now());
 
   // Persist state changes
   useEffect(() => { localStorage.setItem('app_chats', JSON.stringify(chats)); }, [chats]);
@@ -105,68 +97,6 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('app_favorites', JSON.stringify(favorites)); }, [favorites]);
   useEffect(() => { localStorage.setItem('app_changelogs', JSON.stringify(changelogs)); }, [changelogs]);
   useEffect(() => { localStorage.setItem('app_settings', JSON.stringify(settings)); }, [settings]);
-  useEffect(() => { localStorage.setItem('app_admin_creds', JSON.stringify(adminCredentials)); }, [adminCredentials]);
-
-  // --- Cloud Sync Logic ---
-  
-  // 1. Auto Push (Save to cloud on changes)
-  useEffect(() => {
-    // Skip if no sync code
-    if (!settings.syncCode) return;
-
-    const pushToCloud = async () => {
-        setIsSyncing(true);
-        const now = Date.now();
-        lastDataTimestampRef.current = now; // Update local timestamp ref on save
-        
-        try {
-            await SyncService.update(settings.syncCode!, {
-                settings,
-                personas,
-                adminCredentials,
-                timestamp: now
-            });
-            console.log("Cloud Sync: Auto-saved");
-        } catch (e) {
-            console.error("Cloud Sync Save Failed:", e);
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
-    // Debounce sync to avoid spamming API
-    const timeoutId = setTimeout(pushToCloud, 2000);
-    return () => clearTimeout(timeoutId);
-  }, [settings, personas, adminCredentials]); 
-
-  // 2. Auto Pull (Poll cloud for changes from other devices)
-  useEffect(() => {
-      if (!settings.syncCode) return;
-
-      const pollCloud = async () => {
-          try {
-              const data = await SyncService.get(settings.syncCode!);
-              if (data && data.timestamp > lastDataTimestampRef.current) {
-                  console.log("Cloud Sync: Detected newer version from cloud, syncing...");
-                  lastDataTimestampRef.current = data.timestamp;
-                  
-                  // Update state
-                  if (data.settings) setSettings(prev => ({ ...prev, ...data.settings }));
-                  if (data.personas) setPersonas(data.personas);
-                  if (data.adminCredentials) setAdminCredentials(data.adminCredentials);
-                  
-                  // Optional: Show a subtle indicator
-              }
-          } catch (e) {
-              // Silent fail on poll
-              console.warn("Poll failed", e);
-          }
-      };
-
-      // Poll every 3 seconds
-      const intervalId = setInterval(pollCloud, 3000);
-      return () => clearInterval(intervalId);
-  }, [settings.syncCode]);
 
 
   // Derived Active Content
@@ -337,14 +267,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-full w-full bg-white select-none relative">
-       {/* Sync Indicator */}
-       {isSyncing && (
-           <div className="fixed top-2 right-2 z-50 bg-white/90 backdrop-blur border border-gray-200 shadow-sm rounded-full px-3 py-1 text-xs text-green-600 flex items-center gap-2 animate-pulse pointer-events-none">
-               <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-               云端同步中...
-           </div>
-       )}
-
        {/* Sidebar - Hidden on mobile if chat is open */}
        <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} flex-shrink-0 z-20 h-full`}>
            <Sidebar 

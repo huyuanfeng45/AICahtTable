@@ -72,7 +72,10 @@ export const generatePersonaResponse = async (
   if (providerId === 'gemini') {
     // Prefer settings API Key, then env
     const apiKey = globalConfig.apiKey || process.env.API_KEY || ''; 
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ 
+        apiKey,
+        baseUrl: globalConfig.baseUrl || undefined
+    });
 
     if (!apiKey) {
       return `Error: Gemini API Key is missing. Please check Settings > Model Access.`;
@@ -187,7 +190,10 @@ export const generateChatName = async (
       const apiKey = config.apiKey || process.env.API_KEY || '';
       if (!apiKey) throw new Error("Missing Gemini API Key");
       
-      const ai = new GoogleGenAI({ apiKey });
+      const ai = new GoogleGenAI({ 
+          apiKey,
+          baseUrl: config.baseUrl || undefined
+      });
       try {
           const response = await ai.models.generateContent({
               model: modelId,
@@ -232,7 +238,10 @@ export const generateImagePrompt = async (
       if (providerId === 'gemini') {
           const apiKey = config.apiKey || process.env.API_KEY || '';
           if (!apiKey) throw new Error("Missing API Key");
-          const ai = new GoogleGenAI({ apiKey });
+          const ai = new GoogleGenAI({ 
+              apiKey,
+              baseUrl: config.baseUrl || undefined
+          });
           const response = await ai.models.generateContent({ model: modelId, contents: prompt });
           return response.text?.trim() || "abstract geometric shapes";
       } else {

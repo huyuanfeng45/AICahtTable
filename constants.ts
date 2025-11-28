@@ -1,5 +1,3 @@
-
-
 import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry } from './types';
 
 export const USER_ID = 'user-me';
@@ -184,8 +182,8 @@ export const MODEL_PROVIDERS: ModelProvider[] = [
 ];
 
 export const DEFAULT_PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
-  gemini: { apiKey: '', baseUrl: 'https://generativelanguage.googleapis.com', selectedModel: 'gemini-2.5-flash' },
-  deepseek: { apiKey: '', baseUrl: 'https://api.deepseek.com', selectedModel: 'deepseek-chat' },
-  qwen: { apiKey: '', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', selectedModel: 'qwen-plus' },
+  gemini: { apiKey: 'sk-yiQzesnK3f0lwWjyqSt19zZUtVZOqLEKTqrG2sv1alNvI4x7', baseUrl: 'https://max.openai365.top/v1', selectedModel: 'gemini-2.5-flash' },
+  deepseek: { apiKey: 'sk-0eae8439927e468081441e1695db0305', baseUrl: 'https://api.deepseek.com', selectedModel: 'deepseek-chat' },
+  qwen: { apiKey: 'sk-5049ddca2d3c4a1db3bd96bf277794e7', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', selectedModel: 'qwen-plus' },
   openai: { apiKey: '', baseUrl: 'https://api.openai.com/v1', selectedModel: 'gpt-4o' }
 };
