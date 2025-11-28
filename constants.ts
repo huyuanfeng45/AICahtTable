@@ -1,6 +1,6 @@
 
 
-import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry } from './types';
+import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry, AppSettings } from './types';
 
 export const USER_ID = 'user-me';
 
@@ -188,4 +188,13 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
   deepseek: { apiKey: '', baseUrl: 'https://api.deepseek.com', selectedModel: 'deepseek-chat' },
   qwen: { apiKey: '', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', selectedModel: 'qwen-plus' },
   openai: { apiKey: '', baseUrl: 'https://api.openai.com/v1', selectedModel: 'gpt-4o' }
+};
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  userAvatar: 'https://picsum.photos/seed/me/100/100',
+  userName: 'User',
+  geminiModel: 'gemini-2.5-flash',
+  enableThinking: false,
+  activeProvider: 'gemini',
+  providerConfigs: DEFAULT_PROVIDER_CONFIGS
 };

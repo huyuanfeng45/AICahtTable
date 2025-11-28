@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
@@ -53,6 +54,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const [isFetchingModels, setIsFetchingModels] = useState<Record<string, boolean>>({});
   const [fetchError, setFetchError] = useState<Record<string, string>>({});
+  const [exportedCode, setExportedCode] = useState<string | null>(null);
 
   const [error, setError] = useState('');
 
@@ -95,6 +97,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onClose();
   };
 
+  const handleExportDefaults = () => {
+      // Construct current settings object to export
+      const currentConfig: AppSettings = {
+          userAvatar: localAvatar,
+          userName: settings.userName,
+          geminiModel: localGeminiModel,
+          enableThinking: localEnableThinking,
+          activeProvider: localActiveProvider,
+          providerConfigs: localProviderConfigs
+      };
+      
+      const code = `// 请将下方代码复制到 constants.ts 并覆盖 DEFAULT_APP_SETTINGS 变量\n\nexport const DEFAULT_APP_SETTINGS: AppSettings = ${JSON.stringify(currentConfig, null, 2)};`;
+      setExportedCode(code);
+  };
+
   const updateProviderConfig = (providerId: ProviderId, key: keyof ProviderConfig, value: any) => {
     setLocalProviderConfigs(prev => ({
       ...prev,
@@ -119,9 +136,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       // Clean URL: remove trailing slash
       const baseUrl = config.baseUrl.replace(/\/$/, '');
       let url = `${baseUrl}/models`;
-      
-      // Special case for providers that might need /v1/models if user didn't include v1 in base
-      // But usually user enters full base url like https://api.openai.com/v1
       
       const response = await fetch(url, {
         method: 'GET',
@@ -152,11 +166,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
          throw new Error('No models found');
       }
 
-      // Update local config with fetched models
       updateProviderConfig(providerId, 'fetchedModels', models);
-      
-      // Optionally auto-select the first one if current selection is not in list? 
-      // Nah, just keep current or let user choose.
       
       setFetchError(prev => ({ ...prev, [providerId]: '' })); // clear error
     } catch (err) {
@@ -310,6 +320,19 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       修改此处将更新登录后台所需的凭证
                   </div>
                </div>
+            </div>
+            
+            {/* Export Config Section */}
+            <div className="pt-4 border-t border-gray-100 mt-6">
+               <h4 className="text-sm font-medium text-gray-900 mb-2">部署配置</h4>
+               <p className="text-xs text-gray-500 mb-3">导出当前设置作为应用的默认配置 (DEFAULT_APP_SETTINGS)。</p>
+               <button 
+                  onClick={handleExportDefaults}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
+               >
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                   生成默认配置代码
+               </button>
             </div>
         </div>
     </div>
@@ -699,6 +722,45 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       保存设置
                     </button>
+                </div>
+            )}
+            
+            {/* Export Code Modal Overlay */}
+            {exportedCode && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-8 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-full">
+                         <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                             <h3 className="font-bold text-gray-800">默认配置代码</h3>
+                             <button onClick={() => setExportedCode(null)} className="text-gray-500 hover:text-gray-700">
+                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                             </button>
+                         </div>
+                         <div className="p-4 flex-1 overflow-hidden relative">
+                             <textarea 
+                                readOnly
+                                value={exportedCode}
+                                className="w-full h-[300px] font-mono text-xs bg-gray-50 border border-gray-200 rounded p-3 focus:outline-none resize-none"
+                                onClick={(e) => e.currentTarget.select()}
+                             />
+                         </div>
+                         <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+                             <button 
+                                onClick={() => setExportedCode(null)}
+                                className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-200 rounded"
+                             >
+                                 关闭
+                             </button>
+                             <button 
+                                onClick={() => {
+                                    navigator.clipboard.writeText(exportedCode);
+                                    alert("已复制到剪贴板！");
+                                }}
+                                className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 rounded"
+                             >
+                                 复制代码
+                             </button>
+                         </div>
+                    </div>
                 </div>
             )}
         </div>

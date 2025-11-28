@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -8,7 +9,7 @@ import ChatWindow from './components/ChatWindow';
 import ChangelogView from './components/ChangelogView';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
-import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS } from './constants';
+import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry } from './types';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
@@ -72,20 +73,14 @@ const App: React.FC = () => {
     const saved = loadState<AppSettings | null>('app_settings', null);
     // Use defaults if no saved settings
     if (!saved) {
-      return {
-        userAvatar: 'https://picsum.photos/seed/me/100/100',
-        userName: 'User',
-        geminiModel: 'gemini-2.5-flash',
-        enableThinking: false,
-        activeProvider: 'gemini',
-        providerConfigs: DEFAULT_PROVIDER_CONFIGS
-      };
+      return DEFAULT_APP_SETTINGS;
     }
     // Deep merge providerConfigs to handle new providers in code updates
     return {
+        ...DEFAULT_APP_SETTINGS,
         ...saved,
         providerConfigs: {
-            ...DEFAULT_PROVIDER_CONFIGS,
+            ...DEFAULT_APP_SETTINGS.providerConfigs,
             ...(saved.providerConfigs || {})
         }
     };
