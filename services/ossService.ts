@@ -1,3 +1,4 @@
+
 import { OssConfig, AppSettings, Persona } from '../types';
 
 // Declare global OSS if not typed
@@ -14,7 +15,7 @@ export interface GlobalSyncData {
   personas: Persona[];
 }
 
-const MAX_RETRY_TIME = 5000; // 5 seconds
+const MAX_RETRY_TIME = 10000; // 10 seconds
 const RETRY_INTERVAL = 200; // 200 ms
 
 /**

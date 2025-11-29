@@ -75,8 +75,10 @@ const App: React.FC = () => {
               accessKeySecret: envOssConfig.accessKeySecret,
               bucket: envOssConfig.bucket,
               path: envOssConfig.path,
-              enabled: global.ossConfig?.enabled ?? envOssConfig.enabled,
-              autoSync: global.ossConfig?.autoSync ?? envOssConfig.autoSync,
+              // Force enabled/autoSync to true if Environment Variables exist
+              // This guarantees "Open webpage automatically connect" regardless of previous local saves
+              enabled: true,
+              autoSync: true,
           };
       } else {
           mergedSettings.ossConfig = global.ossConfig || DEFAULT_APP_SETTINGS.ossConfig;
@@ -193,8 +195,9 @@ const App: React.FC = () => {
               // OSS Config Logic: Priority = Env > SavedGlobal > SavedUser > Default
               ossConfig: hasEnvOss ? {
                   ...envOssConfig,
-                  enabled: savedGlobalSettings.ossConfig?.enabled ?? envOssConfig.enabled,
-                  autoSync: savedGlobalSettings.ossConfig?.autoSync ?? envOssConfig.autoSync,
+                  // Force enable/autoSync if env vars exist
+                  enabled: true,
+                  autoSync: true,
               } : (savedGlobalSettings.ossConfig || (savedUserSettings?.ossConfig || DEFAULT_APP_SETTINGS.ossConfig)),
               
               // Ensure user profile is preserved

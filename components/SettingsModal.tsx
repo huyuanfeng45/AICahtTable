@@ -573,9 +573,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             type="checkbox" 
                             checked={localOssConfig.enabled}
                             onChange={(e) => setLocalOssConfig({...localOssConfig, enabled: e.target.checked})}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                            disabled={isEnvManaged}
                           />
-                          <label htmlFor="enableOss" className="ml-2 text-sm text-gray-700">启用云端同步 (Enable)</label>
+                          <label htmlFor="enableOss" className={`ml-2 text-sm text-gray-700 ${isEnvManaged ? 'opacity-70' : ''}`}>
+                             启用云端同步 (Enable) {isEnvManaged && '(Enforced)'}
+                          </label>
                       </div>
                       <div className="flex items-center">
                           <input 
@@ -583,9 +586,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             type="checkbox" 
                             checked={localOssConfig.autoSync}
                             onChange={(e) => setLocalOssConfig({...localOssConfig, autoSync: e.target.checked})}
-                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded disabled:opacity-50"
+                            disabled={isEnvManaged}
                           />
-                          <label htmlFor="autoSync" className="ml-2 text-sm text-gray-700">启动时自动拉取 (Auto Pull)</label>
+                          <label htmlFor="autoSync" className={`ml-2 text-sm text-gray-700 ${isEnvManaged ? 'opacity-70' : ''}`}>
+                              启动时自动拉取 (Auto Pull) {isEnvManaged && '(Enforced)'}
+                          </label>
                       </div>
                   </div>
               </div>
