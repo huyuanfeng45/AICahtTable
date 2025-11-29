@@ -24,6 +24,7 @@ interface SettingsModalProps {
   onAdminUpdateUser?: (userId: string, updates: Partial<UserProfile>) => void;
   onAdminDeleteUser?: (userId: string) => void;
   onAdminToggleBanIp?: (ip: string) => void;
+  onUpdateAllUsers?: (users: UserProfile[]) => void;
 }
 
 type Tab = 'profile' | 'models' | 'characters' | 'users' | 'cloud';
@@ -44,7 +45,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   allUsers,
   onAdminUpdateUser,
   onAdminDeleteUser,
-  onAdminToggleBanIp
+  onAdminToggleBanIp,
+  onUpdateAllUsers
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   
@@ -135,8 +137,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         if (localOssConfig.enabled) {
             setIsSaving(true);
             try {
-                // Upload current state to cloud
-                await uploadGlobalConfig(newSettings, localPersonas, localUserName);
+                // Upload current state to cloud, including all users for Admin
+                await uploadGlobalConfig(newSettings, localPersonas, allUsers || [], localUserName);
                 console.log('Auto-uploaded config to OSS');
             } catch (e) {
                 console.error('Auto upload failed', e);
@@ -192,7 +194,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               enableThinking: localEnableThinking,
               ossConfig: localOssConfig
           };
-          await uploadGlobalConfig(tempSettings, localPersonas, settings.userName);
+          // Include users in manual sync
+          await uploadGlobalConfig(tempSettings, localPersonas, allUsers || [], settings.userName);
           setSyncStatus(`上传成功! (${new Date().toLocaleTimeString()})`);
       } catch (e) {
           console.error(e);
@@ -218,6 +221,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               if (data.appSettings.enableThinking !== undefined) setLocalEnableThinking(data.appSettings.enableThinking);
               
               if (data.personas) setLocalPersonas(data.personas);
+              
+              // Apply downloaded users if exists
+              if (data.users && onUpdateAllUsers) {
+                  onUpdateAllUsers(data.users);
+              }
               
               setSyncStatus(`同步成功! 更新于: ${new Date(data.timestamp).toLocaleString()}`);
           } else {
@@ -637,7 +645,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       <p>注意：</p>
                       <ul className="list-disc list-inside space-y-1 mt-1 ml-1">
                           <li>上传操作将覆盖云端的 <code>{localOssConfig.path || 'config.json'}</code> 文件。</li>
-                          <li>拉取操作将覆盖本地的“模型接入”和“角色管理”配置。</li>
+                          <li>拉取操作将覆盖本地的“模型接入”、“角色管理”和“用户列表”配置。</li>
                           {isEnvManaged && (
                               <li className="text-purple-600 font-medium">OSS 连接信息正由环境变量管理，普通用户打开应用时将自动拉取。</li>
                           )}

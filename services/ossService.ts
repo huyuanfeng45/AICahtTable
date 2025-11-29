@@ -1,5 +1,5 @@
 
-import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry } from '../types';
+import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile } from '../types';
 
 // Declare global OSS if not typed
 declare global {
@@ -13,6 +13,7 @@ export interface GlobalSyncData {
   updatedBy: string;
   appSettings: Partial<AppSettings>; // Contains providerConfigs, activeProvider, etc.
   personas: Persona[];
+  users: UserProfile[]; // Sync registered users
 }
 
 export interface UserCloudData {
@@ -75,11 +76,12 @@ function getUserBackupPath(config: OssConfig, userId: string): string {
 }
 
 /**
- * Uploads current global configuration (Provider settings + Personas) to OSS.
+ * Uploads current global configuration (Provider settings + Personas + Users) to OSS.
  */
 export const uploadGlobalConfig = async (
   settings: AppSettings, 
   personas: Persona[],
+  users: UserProfile[],
   uploadedBy: string = 'admin'
 ): Promise<void> => {
   if (!settings.ossConfig?.enabled) {
@@ -104,7 +106,8 @@ export const uploadGlobalConfig = async (
       // but usually Banned IPs should be synced by Admin.
       bannedIps: settings.bannedIps
     },
-    personas: personas
+    personas: personas,
+    users: users
   };
 
   const content = JSON.stringify(syncData, null, 2);

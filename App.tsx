@@ -144,6 +144,15 @@ const App: React.FC = () => {
                           localStorage.setItem('app_personas', JSON.stringify(data.personas));
                       }
                       
+                      // Update Users Registry from Cloud (For Admin Management)
+                      if (data.users && Array.isArray(data.users)) {
+                          // Merge Strategy: Keep local new users not yet synced, update existing
+                          // For simplicity, we prioritize Cloud list but try to preserve any local-only user if ID not present?
+                          // Given this is an Admin centric feature, typically Cloud overwrites local registry to keep consistency.
+                          setUsers(data.users);
+                          localStorage.setItem('app_users', JSON.stringify(data.users));
+                      }
+                      
                       // Persist merged state to local storage
                       const configToSave = {
                           providerConfigs: newSettings.providerConfigs,
@@ -725,6 +734,7 @@ const App: React.FC = () => {
           onAdminUpdateUser={handleAdminUpdateUser}
           onAdminDeleteUser={handleDeleteUser}
           onAdminToggleBanIp={handleAdminToggleBanIp}
+          onUpdateAllUsers={setUsers}
        />
 
        <AboutModal 
