@@ -73,6 +73,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   });
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const [isFetchingModels, setIsFetchingModels] = useState<Record<string, boolean>>({});
   const [fetchError, setFetchError] = useState<Record<string, string>>({});
@@ -95,6 +96,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setLocalAdminUsername(adminCredentials.username);
       setLocalAdminPassword(adminCredentials.password);
       if (settings.ossConfig) setLocalOssConfig(settings.ossConfig);
+      setIsSaving(false);
     }
   }, [isOpen, settings, personas, adminCredentials]);
 
@@ -108,8 +110,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    onUpdateSettings({
+  const handleSave = async () => {
+    if (isSaving) return;
+
+    const newSettings = {
       ...settings,
       userAvatar: localAvatar,
       userName: localUserName,
@@ -118,12 +122,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       activeProvider: localActiveProvider,
       providerConfigs: localProviderConfigs,
       ossConfig: localOssConfig
-    });
+    };
+    
+    // Update Local State
+    onUpdateSettings(newSettings);
     
     // Only update personas/admin-creds if Admin
     if (isAuthenticated) {
         onUpdatePersonas(localPersonas);
         onUpdateAdminCredentials({ username: localAdminUsername, password: localAdminPassword });
+
+        // Auto Upload to OSS if enabled
+        if (localOssConfig.enabled) {
+            setIsSaving(true);
+            try {
+                // Upload current state to cloud
+                await uploadGlobalConfig(newSettings, localPersonas, localUserName);
+                console.log('Auto-uploaded config to OSS');
+            } catch (e) {
+                console.error('Auto upload failed', e);
+                // Alert user but don't prevent close, as local save succeeded
+                alert(`设置已保存，但自动同步到云端失败：${e instanceof Error ? e.message : String(e)}`);
+            } finally {
+                setIsSaving(false);
+            }
+        }
     }
     
     onClose();
@@ -1140,15 +1163,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="px-8 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
                 <button 
                     onClick={onClose}
-                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
+                    disabled={isSaving}
+                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50"
                 >
                     取消
                 </button>
                 <button 
                     onClick={handleSave}
-                    className="px-4 py-2 text-sm bg-[#07c160] text-white rounded hover:bg-[#06ad56] shadow-sm font-medium transition-colors"
+                    disabled={isSaving}
+                    className="px-4 py-2 text-sm bg-[#07c160] text-white rounded hover:bg-[#06ad56] shadow-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-wait"
                 >
-                    保存设置
+                    {isSaving && (
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    )}
+                    {isSaving ? '保存并上传...' : '保存设置'}
                 </button>
             </div>
             

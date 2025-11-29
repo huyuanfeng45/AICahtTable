@@ -55,7 +55,6 @@ const App: React.FC = () => {
       const global = loadState<Partial<AppSettings>>('app_global_settings', {});
       
       // Determine if we have Environment Variables for OSS
-      // These are populated in DEFAULT_APP_SETTINGS via constants.ts
       const envOssConfig = DEFAULT_APP_SETTINGS.ossConfig;
       const hasEnvOss = envOssConfig && envOssConfig.accessKeyId && envOssConfig.bucket;
       
@@ -67,8 +66,7 @@ const App: React.FC = () => {
           userName: global.userName || DEFAULT_APP_SETTINGS.userName,
       };
       
-      // CRITICAL: Force OSS Config from Environment if present, overriding local storage
-      // This ensures that if the admin deploys with new keys, everyone gets them.
+      // CRITICAL: Force OSS Config from Environment if present
       if (hasEnvOss) {
           mergedSettings.ossConfig = {
               ...mergedSettings.ossConfig,
@@ -77,14 +75,10 @@ const App: React.FC = () => {
               accessKeySecret: envOssConfig.accessKeySecret,
               bucket: envOssConfig.bucket,
               path: envOssConfig.path,
-              // If env vars exist, default to Enabled/AutoSync unless user explicitly saved otherwise
-              // However, to satisfy "others can directly use", we lean towards enforcing the Env defaults
-              // if the local storage doesn't explicitly have them.
               enabled: global.ossConfig?.enabled ?? envOssConfig.enabled,
               autoSync: global.ossConfig?.autoSync ?? envOssConfig.autoSync,
           };
       } else {
-          // If no env vars, respect local storage or default empty
           mergedSettings.ossConfig = global.ossConfig || DEFAULT_APP_SETTINGS.ossConfig;
       }
       
@@ -103,6 +97,7 @@ const App: React.FC = () => {
   const [aboutContent, setAboutContent] = useState(INITIAL_ABOUT_CONTENT);
   const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog'>('chats');
   const [searchQuery, setSearchQuery] = useState('');
+  const [syncStatus, setSyncStatus] = useState<string>(''); // For AuthModal feedback
 
   // Admin Auth (for global settings)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -115,39 +110,49 @@ const App: React.FC = () => {
   useEffect(() => {
       const performAutoSync = async () => {
           if (settings.ossConfig?.enabled && settings.ossConfig?.autoSync) {
-              console.log('Attempting auto-sync from OSS...');
+              setSyncStatus('正在连接云端获取最新配置...');
               try {
                   const data = await downloadGlobalConfig(settings);
                   if (data) {
-                      console.log('Auto-sync successful');
+                      console.log('Auto-sync successful', data);
+                      setSyncStatus('配置同步成功');
+                      
                       const newSettings = {
                           ...settings,
                           providerConfigs: data.appSettings.providerConfigs || settings.providerConfigs,
                           activeProvider: data.appSettings.activeProvider || settings.activeProvider,
                           geminiModel: data.appSettings.geminiModel || settings.geminiModel,
                           enableThinking: data.appSettings.enableThinking ?? settings.enableThinking,
+                          bannedIps: data.appSettings.bannedIps || settings.bannedIps
                       };
                       setSettings(newSettings);
                       
                       // Update Personas
                       if (data.personas) {
                           setPersonas(data.personas);
+                          localStorage.setItem('app_personas', JSON.stringify(data.personas));
                       }
                       
                       // Persist merged state to local storage
-                      // Note: We do NOT persist the OSS secrets if they are from env vars (to keep them clean),
-                      // but typically localStorage stringify will include them. That's fine for client-side app persistence.
-                      localStorage.setItem('app_global_settings', JSON.stringify({
+                      const configToSave = {
                           providerConfigs: newSettings.providerConfigs,
                           activeProvider: newSettings.activeProvider,
                           geminiModel: newSettings.geminiModel,
                           enableThinking: newSettings.enableThinking,
                           bannedIps: newSettings.bannedIps,
-                          ossConfig: settings.ossConfig
-                      }));
+                          ossConfig: settings.ossConfig // Persist OSS toggle state
+                      };
+                      localStorage.setItem('app_global_settings', JSON.stringify(configToSave));
+                      
+                      // Clear status after delay
+                      setTimeout(() => setSyncStatus(''), 2000);
+                  } else {
+                      setSyncStatus(''); // Silent if empty
                   }
               } catch (e) {
                   console.error('Auto-sync failed', e);
+                  setSyncStatus('云端同步失败 (请检查网络或配置)');
+                  setTimeout(() => setSyncStatus(''), 5000);
               }
           }
       };
@@ -210,7 +215,7 @@ const App: React.FC = () => {
   // Persist Users List
   useEffect(() => { localStorage.setItem('app_users', JSON.stringify(users)); }, [users]);
   
-  // Persist Global Personas
+  // Persist Global Personas (This is redundant if sync runs, but good for edits)
   useEffect(() => { localStorage.setItem('app_personas', JSON.stringify(personas)); }, [personas]);
 
   // Persist User-Specific Data
@@ -526,6 +531,7 @@ const App: React.FC = () => {
             onDeleteUser={handleDeleteUser}
             onValidateAdmin={handleValidateAdmin}
             onAdminLoginSuccess={handleAdminLoginSuccess}
+            syncStatus={syncStatus}
           />
       );
   }

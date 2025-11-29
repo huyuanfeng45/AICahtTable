@@ -14,12 +14,31 @@ export interface GlobalSyncData {
   personas: Persona[];
 }
 
+const MAX_RETRY_TIME = 5000; // 5 seconds
+const RETRY_INTERVAL = 200; // 200 ms
+
+/**
+ * Waits for the Aliyun OSS SDK to load from the CDN.
+ */
+async function waitForOSS(): Promise<void> {
+  if (window.OSS) return;
+
+  const startTime = Date.now();
+  // Poll until loaded or timeout
+  while (Date.now() - startTime < MAX_RETRY_TIME) {
+    if (window.OSS) return;
+    await new Promise(resolve => setTimeout(resolve, RETRY_INTERVAL));
+  }
+  
+  throw new Error('Aliyun OSS SDK failed to load. Please check your network connection.');
+}
+
 /**
  * Creates an OSS client using the credentials provided in the settings.
  */
 function createOssClient(config: OssConfig) {
   if (!window.OSS) {
-    throw new Error('Aliyun OSS SDK not loaded. Please check your network or script tags.');
+    throw new Error('Aliyun OSS SDK not loaded.');
   }
 
   const { region, accessKeyId, accessKeySecret, bucket } = config;
@@ -48,14 +67,13 @@ export const uploadGlobalConfig = async (
   if (!settings.ossConfig?.enabled) {
     throw new Error('OSS Sync is disabled in settings.');
   }
+  
+  await waitForOSS();
 
   const client = createOssClient(settings.ossConfig);
   const path = settings.ossConfig.path || 'ai-roundtable/config.json';
 
   // Prepare data to sync
-  // We sync Provider Configs, Active Provider, and Personas.
-  // We do NOT sync user-specific things like User Name, Avatar, or Banned IPs (unless desired).
-  // For this requirement: "Other users can directly use main account's configured models and roles"
   const syncData: GlobalSyncData = {
     timestamp: Date.now(),
     updatedBy: uploadedBy,
@@ -64,6 +82,9 @@ export const uploadGlobalConfig = async (
       activeProvider: settings.activeProvider,
       geminiModel: settings.geminiModel,
       enableThinking: settings.enableThinking,
+      // We explicitly exclude sensitive user data or ban lists from basic sync if desired,
+      // but usually Banned IPs should be synced by Admin.
+      bannedIps: settings.bannedIps
     },
     personas: personas
   };
@@ -87,14 +108,17 @@ export const downloadGlobalConfig = async (
   settings: AppSettings
 ): Promise<GlobalSyncData | null> => {
   if (!settings.ossConfig?.enabled) {
-    // If disabled, we can't sync.
     return null;
   }
+
+  await waitForOSS();
 
   const client = createOssClient(settings.ossConfig);
   const path = settings.ossConfig.path || 'ai-roundtable/config.json';
 
   try {
+    // Add a random query param to bypass CDN cache if necessary, though OSS SDK handles signature.
+    // Standard get request:
     const result = await client.get(path);
     if (result.content) {
        const text = new TextDecoder('utf-8').decode(result.content);

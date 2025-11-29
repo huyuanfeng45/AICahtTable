@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 
@@ -8,6 +9,7 @@ interface AuthModalProps {
   onDeleteUser: (id: string) => void;
   onValidateAdmin: (u: string, p: string) => boolean;
   onAdminLoginSuccess: () => void;
+  syncStatus?: string;
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ 
@@ -16,7 +18,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
   onRegister, 
   onDeleteUser,
   onValidateAdmin,
-  onAdminLoginSuccess
+  onAdminLoginSuccess,
+  syncStatus
 }) => {
   // If we have users, default to login view, otherwise register
   const [view, setView] = useState<'login' | 'register'>(users.length > 0 ? 'login' : 'register');
@@ -192,8 +195,19 @@ const AuthModal: React.FC<AuthModalProps> = ({
             )}
         </div>
         
-        <div className="bg-gray-50 p-4 text-center text-xs text-gray-400 border-t border-gray-100">
-            Version 1.5.0 - by:HYF
+        {/* Footer with Sync Status */}
+        <div className="bg-gray-50 p-4 text-center border-t border-gray-100 flex flex-col items-center gap-1">
+            <div className="text-xs text-gray-400">Version 1.5.0 - by:HYF</div>
+            {syncStatus && (
+                <div className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1.5 ${
+                    syncStatus.includes('失败') ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+                }`}>
+                    {!syncStatus.includes('失败') && (
+                        <svg className="animate-spin w-2.5 h-2.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    )}
+                    {syncStatus}
+                </div>
+            )}
         </div>
       </div>
     </div>
