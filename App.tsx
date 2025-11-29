@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -294,7 +292,8 @@ const App: React.FC = () => {
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [chats, favorites, changelogs, currentUser, settings.ossConfig?.enabled]);
+    // CRITICAL FIX: Add settings.ossConfig to deps to ensure new users inherit global config triggers
+  }, [chats, favorites, changelogs, currentUser, settings.ossConfig]);
 
 
   // Persist Users List
