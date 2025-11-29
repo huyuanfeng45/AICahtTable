@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
@@ -56,6 +57,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localUserName, setLocalUserName] = useState(settings.userName || 'User');
   const [localGeminiModel, setLocalGeminiModel] = useState<GeminiModelId>(settings.geminiModel);
   const [localEnableThinking, setLocalEnableThinking] = useState(settings.enableThinking);
+  const [localMaxReplyLength, setLocalMaxReplyLength] = useState(settings.maxReplyLength || 200);
   const [localActiveProvider, setLocalActiveProvider] = useState<ProviderId>(settings.activeProvider);
   
   // Local state for admin credentials editing
@@ -99,6 +101,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setLocalUserName(settings.userName || 'User');
       setLocalGeminiModel(settings.geminiModel);
       setLocalEnableThinking(settings.enableThinking);
+      setLocalMaxReplyLength(settings.maxReplyLength || 200);
       setLocalActiveProvider(settings.activeProvider);
       setLocalProviderConfigs(settings.providerConfigs);
       setLocalPersonas(personas);
@@ -128,6 +131,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       userName: localUserName,
       geminiModel: localGeminiModel,
       enableThinking: localEnableThinking,
+      maxReplyLength: localMaxReplyLength,
       activeProvider: localActiveProvider,
       providerConfigs: localProviderConfigs,
       ossConfig: localOssConfig,
@@ -168,6 +172,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           userName: localUserName,
           geminiModel: localGeminiModel,
           enableThinking: localEnableThinking,
+          maxReplyLength: localMaxReplyLength,
           activeProvider: localActiveProvider,
           providerConfigs: localProviderConfigs,
           bannedIps: settings.bannedIps,
@@ -232,6 +237,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               if (data.appSettings.activeProvider) setLocalActiveProvider(data.appSettings.activeProvider as any);
               if (data.appSettings.geminiModel) setLocalGeminiModel(data.appSettings.geminiModel as any);
               if (data.appSettings.enableThinking !== undefined) setLocalEnableThinking(data.appSettings.enableThinking);
+              if (data.appSettings.maxReplyLength !== undefined) setLocalMaxReplyLength(data.appSettings.maxReplyLength);
               if (data.appSettings.notificationConfig) setLocalNotificationConfig(data.appSettings.notificationConfig);
               if (data.appSettings.userAvatar) setLocalAvatar(data.appSettings.userAvatar);
               if (data.appSettings.userName) setLocalUserName(data.appSettings.userName);
@@ -876,6 +882,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
        <p className="text-xs text-gray-500 -mt-3">在此配置全局 API Key 和默认参数。所有用户的对话将使用此配置。</p>
        
        <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 space-y-6 pb-6">
+           {/* Global Settings */}
+           <div className="border border-gray-200 bg-gray-50 rounded-lg p-4">
+               <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                   通用生成参数
+               </h4>
+               <div className="grid grid-cols-2 gap-4">
+                   <div>
+                       <label className="block text-xs font-medium text-gray-600 mb-1">单次回复字数限制 (Max Length)</label>
+                       <input 
+                            type="number"
+                            min="50"
+                            max="2000"
+                            step="50"
+                            value={localMaxReplyLength}
+                            onChange={(e) => setLocalMaxReplyLength(parseInt(e.target.value) || 200)}
+                            className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
+                       />
+                       <p className="text-[10px] text-gray-400 mt-1">控制 AI 单次回复的最大篇幅 (建议 200-500)</p>
+                   </div>
+               </div>
+           </div>
+
            {MODEL_PROVIDERS.map(provider => {
              const isActive = localActiveProvider === provider.id;
              const config = localProviderConfigs[provider.id];

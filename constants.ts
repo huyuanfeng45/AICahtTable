@@ -232,6 +232,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   userName: 'User',
   geminiModel: 'gemini-2.5-flash',
   enableThinking: false,
+  maxReplyLength: 200, // Default limit
   activeProvider: 'gemini',
   providerConfigs: DEFAULT_PROVIDER_CONFIGS,
   bannedIps: [],

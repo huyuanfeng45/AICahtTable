@@ -117,6 +117,7 @@ export interface AppSettings {
   userName: string;
   geminiModel: GeminiModelId; // Legacy / Fallback
   enableThinking: boolean;
+  maxReplyLength: number; // New: Limit the length of AI responses
   
   // New Multi-provider support
   activeProvider: ProviderId; // Default/Global provider

@@ -69,6 +69,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
 
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingSpeakerName, setProcessingSpeakerName] = useState<string | null>(null); // New: Track who is thinking
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -113,6 +114,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     const userText = inputText.trim();
     setInputText('');
     setIsProcessing(true);
+    setProcessingSpeakerName(null);
 
     // 1. Add User Message
     const userMsg: Message = {
@@ -182,8 +184,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
 
     try {
         for (const persona of speechQueue) {
-            // Artificial delay for realism
-            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+            setProcessingSpeakerName(persona.name);
+            
+            // OPTIMIZATION: Reduced artificial delay to 200ms (was 1000ms+)
+            // Just enough to allow state updates to settle visually, but fast.
+            await new Promise(resolve => setTimeout(resolve, 200));
             
             // Get current history
             const currentHistory = messagesRef.current;
@@ -217,6 +222,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         });
     } finally {
         setIsProcessing(false);
+        setProcessingSpeakerName(null);
     }
   };
   
@@ -228,6 +234,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       if (!summarizer) return;
       
       setIsProcessing(true);
+      setProcessingSpeakerName(summarizer.name); // Show who is summarizing
+
       try {
           const responseText = await generatePersonaResponse(
                 summarizer,
@@ -247,6 +255,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
             addMessage(aiMsg);
       } finally {
           setIsProcessing(false);
+          setProcessingSpeakerName(null);
       }
   };
   
@@ -458,7 +467,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       {/* Loading Overlay */}
       {isExporting && (
           <div className="absolute inset-0 bg-black bg-opacity-20 z-[60] flex items-center justify-center">
-              <div className="bg-white px-4 py-2 rounded shadow-lg flex items-center gap-2 text-sm">
+              <div className="bg-white px-4 py-2 rounded shadow-lg flex items-center justify-center gap-2 text-sm">
                    <svg className="animate-spin h-4 w-4 text-green-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                    <span>正在生成图片...</span>
               </div>
@@ -541,8 +550,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         })}
         
         {isProcessing && (
-          <div className="flex items-center text-xs text-gray-400 ml-4 mb-2 animate-pulse">
-             <span>正在输入...</span>
+          <div className="flex items-center text-xs text-gray-400 ml-4 mb-2 animate-pulse gap-2">
+             <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+             <span>{processingSpeakerName ? `${processingSpeakerName} 正在输入...` : '正在输入...'}</span>
           </div>
         )}
         <div ref={messagesEndRef} />

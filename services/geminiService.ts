@@ -1,3 +1,5 @@
+
+
 import { GoogleGenAI } from "@google/genai";
 import { Persona, Message, AppSettings, ProviderConfig } from "../types";
 
@@ -6,7 +8,8 @@ async function callOpenAICompatibleAPI(
   persona: Persona | null, // null for system tasks
   messages: { role: string; content: string }[],
   config: ProviderConfig,
-  modelId: string
+  modelId: string,
+  maxReplyLength: number = 200
 ): Promise<string> {
   const { apiKey, baseUrl } = config;
 
@@ -28,7 +31,7 @@ async function callOpenAICompatibleAPI(
         model: modelId, // Use the specific model ID from persona config
         messages: [
           // System prompt if provided (for Persona) or generic for tasks
-          ...(persona ? [{ role: 'system', content: `你正在扮演一个叫 "${persona.name}" 的角色参与群聊。你的性格设定是: ${persona.systemInstruction}. 请用中文回复，字数控制在100字以内。` }] : []),
+          ...(persona ? [{ role: 'system', content: `你正在扮演一个叫 "${persona.name}" 的角色参与群聊。你的性格设定是: ${persona.systemInstruction}. 请用中文回复，字数控制在${maxReplyLength}字以内。` }] : []),
           ...messages
         ],
         temperature: 0.7,
@@ -67,6 +70,9 @@ export const generatePersonaResponse = async (
   
   // For model, if persona has a specific one, use it. Otherwise use the default from that provider's config
   const modelId = persona.config?.modelId || globalConfig.selectedModel;
+  
+  // Get word limit setting, default to 200 if undefined
+  const maxReplyLength = settings.maxReplyLength || 200;
 
   // --- Logic for Multi-turn Self-Reference ---
   // Detect if this persona has already spoken since the last user message.
@@ -133,7 +139,7 @@ export const generatePersonaResponse = async (
         轮到你发言了。
         请记住你的设定: ${persona.systemInstruction}
         
-        请根据前文的讨论，以你的角色回复。不要重复别人的话，要有自己的观点。保持口语化，像在群聊一样。字数控制在100字以内。
+        请根据前文的讨论，以你的角色回复。不要重复别人的话，要有自己的观点。保持口语化，像在群聊一样。字数控制在${maxReplyLength}字以内。
       `;
 
       let thinkingConfig = undefined;
@@ -184,7 +190,7 @@ export const generatePersonaResponse = async (
     });
 
     try {
-      return await callOpenAICompatibleAPI(persona, messages, config, modelId);
+      return await callOpenAICompatibleAPI(persona, messages, config, modelId, maxReplyLength);
     } catch (error) {
       return `(${providerId} 错误: ${error instanceof Error ? error.message : 'Check Console'})`;
     }
