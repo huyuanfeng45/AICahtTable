@@ -10,7 +10,7 @@ import ChangelogView from './components/ChangelogView';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
 import AuthModal from './components/AuthModal';
-import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
+import { DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, UserProfile } from './types';
 import { downloadGlobalConfig, downloadUserData, uploadUserData, uploadGlobalConfig } from './services/ossService';
 import { sendBarkNotification } from './services/notificationService';
@@ -193,7 +193,7 @@ const App: React.FC = () => {
   useEffect(() => {
       if (currentUser) {
           // 1. Load from LocalStorage first (Instant interaction)
-          setChats(loadState(`app_chats_${currentUser.id}`, MOCK_CHATS));
+          setChats(loadState(`app_chats_${currentUser.id}`, []));
           setFavorites(loadState(`app_favorites_${currentUser.id}`, []));
           setChangelogs(loadState(`app_changelogs_${currentUser.id}`, MOCK_CHANGELOGS));
           
