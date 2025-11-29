@@ -109,6 +109,9 @@ const App: React.FC = () => {
   // Manage Personas State (Global for now, but editable)
   const [personas, setPersonas] = useState<Persona[]>(() => loadState('app_personas', AI_PERSONAS));
 
+  // Determine if Config is present (for UI feedback)
+  const isOssConfigured = !!(settings.ossConfig?.accessKeyId && settings.ossConfig?.bucket);
+
   // --- Auto Sync Logic ---
   useEffect(() => {
       const performAutoSync = async () => {
@@ -540,6 +543,7 @@ const App: React.FC = () => {
             onAdminLoginSuccess={handleAdminLoginSuccess}
             syncStatus={syncStatus}
             ossConnectStatus={ossConnectStatus}
+            isOssConfigured={isOssConfigured}
           />
       );
   }

@@ -11,6 +11,7 @@ interface AuthModalProps {
   onAdminLoginSuccess: () => void;
   syncStatus?: string;
   ossConnectStatus?: 'idle' | 'connecting' | 'connected' | 'error';
+  isOssConfigured?: boolean;
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ 
@@ -21,7 +22,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
   onValidateAdmin,
   onAdminLoginSuccess,
   syncStatus,
-  ossConnectStatus
+  ossConnectStatus,
+  isOssConfigured = true
 }) => {
   // If we have users, default to login view, otherwise register
   const [view, setView] = useState<'login' | 'register'>(users.length > 0 ? 'login' : 'register');
@@ -202,25 +204,32 @@ const AuthModal: React.FC<AuthModalProps> = ({
             <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">Version 1.5.0 - by:HYF</span>
                 {/* Connection Indicator */}
-                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-gray-100 rounded-full shadow-sm">
-                   <div className={`w-2 h-2 rounded-full ${
-                       ossConnectStatus === 'connected' ? 'bg-green-500' :
-                       ossConnectStatus === 'error' ? 'bg-red-500' :
-                       ossConnectStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
-                       'bg-gray-300'
-                   }`}></div>
-                   <span className={`text-[10px] font-medium ${
-                       ossConnectStatus === 'connected' ? 'text-green-600' :
-                       ossConnectStatus === 'error' ? 'text-red-600' :
-                       ossConnectStatus === 'connecting' ? 'text-yellow-600' :
-                       'text-gray-400'
-                   }`}>
-                       {ossConnectStatus === 'connected' ? '数据库已连接' :
-                        ossConnectStatus === 'error' ? '连接失败' :
-                        ossConnectStatus === 'connecting' ? '连接中...' :
-                        '未连接云端'}
-                   </span>
-                </div>
+                {!isOssConfigured ? (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-red-50 border border-red-100 rounded-full shadow-sm">
+                        <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                        <span className="text-[10px] font-medium text-red-600">未检测到云端配置 (Env Missing)</span>
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-gray-100 rounded-full shadow-sm">
+                        <div className={`w-2 h-2 rounded-full ${
+                            ossConnectStatus === 'connected' ? 'bg-green-500' :
+                            ossConnectStatus === 'error' ? 'bg-red-500' :
+                            ossConnectStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
+                            'bg-gray-300'
+                        }`}></div>
+                        <span className={`text-[10px] font-medium ${
+                            ossConnectStatus === 'connected' ? 'text-green-600' :
+                            ossConnectStatus === 'error' ? 'text-red-600' :
+                            ossConnectStatus === 'connecting' ? 'text-yellow-600' :
+                            'text-gray-400'
+                        }`}>
+                            {ossConnectStatus === 'connected' ? '数据库已连接' :
+                             ossConnectStatus === 'error' ? '连接失败' :
+                             ossConnectStatus === 'connecting' ? '连接中...' :
+                             '未连接云端'}
+                        </span>
+                    </div>
+                )}
             </div>
 
             {syncStatus && (

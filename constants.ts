@@ -189,14 +189,38 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
   openai: { apiKey: '', baseUrl: 'https://api.openai.com/v1', selectedModel: 'gpt-4o' }
 };
 
+// Safe environment variable retrieval for Client-Side Bundlers
+const getEnv = (key: string): string => {
+  // 1. Try Vite's import.meta.env
+  try {
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+       // @ts-ignore
+       const val = import.meta.env[`VITE_${key}`] || import.meta.env[key];
+       if (val) return val;
+    }
+  } catch (e) {}
+
+  // 2. Try process.env (Legacy / Webpack / Vercel System Env injection)
+  try {
+    if (typeof process !== 'undefined' && process.env) {
+       return process.env[`VITE_${key}`] || 
+              process.env[`REACT_APP_${key}`] || 
+              process.env[key] || 
+              '';
+    }
+  } catch (e) {}
+
+  return '';
+};
+
 // Check for Vercel/System Env Vars for OSS
-// We check for standard OSS_ prefixes.
 const ENV_OSS_CONFIG = {
-  region: process.env.OSS_REGION || '',
-  accessKeyId: process.env.OSS_ACCESS_KEY_ID || '',
-  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || '',
-  bucket: process.env.OSS_BUCKET || '',
-  path: process.env.OSS_PATH || 'ai-roundtable/config.json',
+  region: getEnv('OSS_REGION'),
+  accessKeyId: getEnv('OSS_ACCESS_KEY_ID'),
+  accessKeySecret: getEnv('OSS_ACCESS_KEY_SECRET'),
+  bucket: getEnv('OSS_BUCKET'),
+  path: getEnv('OSS_PATH') || 'ai-roundtable/config.json',
 };
 
 // If valid credentials exist in environment, we enable sync by default
