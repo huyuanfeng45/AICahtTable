@@ -1,9 +1,11 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
 import { generateRandomPersonaDetails } from '../services/geminiService';
 import { uploadGlobalConfig, downloadGlobalConfig } from '../services/ossService';
+import { sendBarkNotification } from '../services/notificationService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -27,7 +29,7 @@ interface SettingsModalProps {
   onUpdateAllUsers?: (users: UserProfile[]) => void;
 }
 
-type Tab = 'profile' | 'models' | 'characters' | 'users' | 'cloud';
+type Tab = 'profile' | 'models' | 'characters' | 'users' | 'cloud' | 'notifications';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ 
   isOpen, 
@@ -73,6 +75,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localOssConfig, setLocalOssConfig] = useState(settings.ossConfig || {
       region: '', accessKeyId: '', accessKeySecret: '', bucket: '', path: '', enabled: false, autoSync: false
   });
+  
+  // Local Notification Config
+  const [localNotificationConfig, setLocalNotificationConfig] = useState(settings.notificationConfig || {
+      enabled: false, serverUrl: 'https://api.day.app', deviceKey: ''
+  });
+
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
@@ -98,13 +106,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setLocalAdminUsername(adminCredentials.username);
       setLocalAdminPassword(adminCredentials.password);
       if (settings.ossConfig) setLocalOssConfig(settings.ossConfig);
+      if (settings.notificationConfig) setLocalNotificationConfig(settings.notificationConfig);
       setIsSaving(false);
     }
   }, [isOpen, settings, personas, adminCredentials]);
 
   // Reset tab if not authenticated and on restricted tab
   useEffect(() => {
-      if (!isAuthenticated && (activeTab === 'models' || activeTab === 'characters' || activeTab === 'users' || activeTab === 'cloud')) {
+      if (!isAuthenticated && (activeTab === 'models' || activeTab === 'characters' || activeTab === 'users' || activeTab === 'cloud' || activeTab === 'notifications')) {
           setActiveTab('profile');
       }
   }, [isAuthenticated, activeTab]);
@@ -122,7 +131,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       enableThinking: localEnableThinking,
       activeProvider: localActiveProvider,
       providerConfigs: localProviderConfigs,
-      ossConfig: localOssConfig
+      ossConfig: localOssConfig,
+      notificationConfig: localNotificationConfig
     };
     
     // Update Local State
@@ -162,7 +172,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           activeProvider: localActiveProvider,
           providerConfigs: localProviderConfigs,
           bannedIps: settings.bannedIps,
-          ossConfig: localOssConfig
+          ossConfig: localOssConfig,
+          notificationConfig: localNotificationConfig
       };
       
       const code = `// 请将下方代码复制到 constants.ts 并覆盖 DEFAULT_APP_SETTINGS 变量\n\nexport const DEFAULT_APP_SETTINGS: AppSettings = ${JSON.stringify(currentConfig, null, 2)};`;
@@ -192,7 +203,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               activeProvider: localActiveProvider,
               geminiModel: localGeminiModel,
               enableThinking: localEnableThinking,
-              ossConfig: localOssConfig
+              ossConfig: localOssConfig,
+              notificationConfig: localNotificationConfig
           };
           // Include users in manual sync
           await uploadGlobalConfig(tempSettings, localPersonas, allUsers || [], settings.userName);
@@ -219,6 +231,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               if (data.appSettings.activeProvider) setLocalActiveProvider(data.appSettings.activeProvider as any);
               if (data.appSettings.geminiModel) setLocalGeminiModel(data.appSettings.geminiModel as any);
               if (data.appSettings.enableThinking !== undefined) setLocalEnableThinking(data.appSettings.enableThinking);
+              if (data.appSettings.notificationConfig) setLocalNotificationConfig(data.appSettings.notificationConfig);
               
               if (data.personas) setLocalPersonas(data.personas);
               
@@ -289,6 +302,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     } finally {
       setIsFetchingModels(prev => ({ ...prev, [providerId]: false }));
     }
+  };
+
+  const handleTestNotification = async () => {
+      if (!localNotificationConfig.deviceKey) {
+          alert("请先输入 Device Key");
+          return;
+      }
+      await sendBarkNotification("Bark 测试", "这是一条测试消息。如果您收到此消息，说明配置成功。", localNotificationConfig);
   };
 
 
@@ -479,6 +500,83 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       })}
                   </tbody>
               </table>
+          </div>
+      </div>
+  );
+
+  const renderNotificationsTab = () => (
+      <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+                <h3 className="text-lg font-medium text-gray-900">通知推送 (Notifications)</h3>
+                <p className="text-xs text-gray-500">配置 Bark 用于接收新用户注册提醒。</p>
+            </div>
+            <div className="bg-orange-100 text-orange-700 px-3 py-1 rounded text-xs font-medium border border-orange-200">
+                Bark App required
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
+              <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-6">
+                  <div className="flex items-start gap-4">
+                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">
+                          🔔
+                      </div>
+                      <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">Bark Push</h4>
+                          <p className="text-xs text-gray-500 mt-1">Bark 是一个 iOS 端的自定义推送服务。开启后，每当有新用户注册时，您的手机将收到推送通知。</p>
+                      </div>
+                  </div>
+
+                  <div className="space-y-4">
+                       <div className="flex items-center">
+                          <input 
+                            id="enableBark" 
+                            type="checkbox" 
+                            checked={localNotificationConfig.enabled}
+                            onChange={(e) => setLocalNotificationConfig({...localNotificationConfig, enabled: e.target.checked})}
+                            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor="enableBark" className="ml-2 text-sm text-gray-700 font-medium">
+                             启用新用户注册提醒 (Enable New User Alerts)
+                          </label>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 pt-2">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Bark Server URL</label>
+                            <input 
+                                type="text" 
+                                placeholder="https://api.day.app"
+                                value={localNotificationConfig.serverUrl}
+                                onChange={(e) => setLocalNotificationConfig({...localNotificationConfig, serverUrl: e.target.value})}
+                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+                            <p className="text-[10px] text-gray-400 mt-1">默认为官方服务器 https://api.day.app，也可使用自建服务器。</p>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Device Key</label>
+                            <input 
+                                type="text" 
+                                placeholder="Bark App 中的 Key"
+                                value={localNotificationConfig.deviceKey}
+                                onChange={(e) => setLocalNotificationConfig({...localNotificationConfig, deviceKey: e.target.value})}
+                                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 font-mono"
+                            />
+                          </div>
+                      </div>
+                      
+                      <div className="pt-2">
+                          <button 
+                            onClick={handleTestNotification}
+                            disabled={!localNotificationConfig.deviceKey}
+                            className="text-sm bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded transition-colors disabled:opacity-50"
+                          >
+                              发送测试推送 (Send Test)
+                          </button>
+                      </div>
+                  </div>
+              </div>
           </div>
       </div>
   );
@@ -1140,6 +1238,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                         用户管理
                     </button>
+
+                    <button 
+                    onClick={() => setActiveTab('notifications')}
+                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'notifications' 
+                        ? 'bg-white text-green-600 shadow-sm' 
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                        通知推送
+                    </button>
                     </>
                 )}
             </nav>
@@ -1168,6 +1278,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     {activeTab === 'models' && isAuthenticated && renderModelsTab()}
                     {activeTab === 'characters' && isAuthenticated && renderCharactersTab()}
                     {activeTab === 'users' && isAuthenticated && renderUsersTab()}
+                    {activeTab === 'notifications' && isAuthenticated && renderNotificationsTab()}
                 </>
             </div>
 

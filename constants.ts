@@ -1,4 +1,5 @@
 
+
 import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry, AppSettings } from './types';
 
 export const USER_ID = 'user-me';
@@ -238,5 +239,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     ...ENV_OSS_CONFIG,
     enabled: hasEnvOss,
     autoSync: hasEnvOss
+  },
+  notificationConfig: {
+    enabled: false,
+    serverUrl: 'https://api.day.app',
+    deviceKey: ''
   }
 };

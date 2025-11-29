@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -13,6 +14,7 @@ import AuthModal from './components/AuthModal';
 import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, UserProfile } from './types';
 import { downloadGlobalConfig, downloadUserData, uploadUserData } from './services/ossService';
+import { sendBarkNotification } from './services/notificationService';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
@@ -64,6 +66,8 @@ const App: React.FC = () => {
           bannedIps: global.bannedIps || [],
           // Preserve User Profile if coming from global cache (legacy) or default
           userName: global.userName || DEFAULT_APP_SETTINGS.userName,
+          // Notification config is global/admin
+          notificationConfig: global.notificationConfig || DEFAULT_APP_SETTINGS.notificationConfig
       };
       
       // CRITICAL: Force OSS Config from Environment if present
@@ -134,7 +138,8 @@ const App: React.FC = () => {
                           activeProvider: data.appSettings.activeProvider || settings.activeProvider,
                           geminiModel: data.appSettings.geminiModel || settings.geminiModel,
                           enableThinking: data.appSettings.enableThinking ?? settings.enableThinking,
-                          bannedIps: data.appSettings.bannedIps || settings.bannedIps
+                          bannedIps: data.appSettings.bannedIps || settings.bannedIps,
+                          notificationConfig: data.appSettings.notificationConfig || settings.notificationConfig
                       };
                       setSettings(newSettings);
                       
@@ -160,7 +165,8 @@ const App: React.FC = () => {
                           geminiModel: newSettings.geminiModel,
                           enableThinking: newSettings.enableThinking,
                           bannedIps: newSettings.bannedIps,
-                          ossConfig: settings.ossConfig // Persist OSS toggle state
+                          ossConfig: settings.ossConfig, // Persist OSS toggle state
+                          notificationConfig: newSettings.notificationConfig
                       };
                       localStorage.setItem('app_global_settings', JSON.stringify(configToSave));
                       
@@ -213,6 +219,7 @@ const App: React.FC = () => {
                   enabled: true,
                   autoSync: true,
               } : (savedGlobalSettings.ossConfig || (savedUserSettings?.ossConfig || DEFAULT_APP_SETTINGS.ossConfig)),
+              notificationConfig: savedGlobalSettings.notificationConfig || DEFAULT_APP_SETTINGS.notificationConfig,
               userName: savedUserSettings?.userName || currentUser.name,
               userAvatar: savedUserSettings?.userAvatar || currentUser.avatar,
           };
@@ -324,6 +331,15 @@ const App: React.FC = () => {
       };
       setUsers(prev => [...prev, newUser]);
       setCurrentUser(newUser);
+
+      // Trigger Notification (Bark)
+      if (settings.notificationConfig?.enabled) {
+          sendBarkNotification(
+            '新用户注册 (New User)', 
+            `用户 "${name}" 已注册。\nIP: ${mockIp}`, 
+            settings.notificationConfig
+          );
+      }
   };
 
   const handleLogin = (user: UserProfile) => {
@@ -363,14 +379,15 @@ const App: React.FC = () => {
         }
     }
 
-    // Save Global Configs (Settings + OSS config) to local storage for persistence
+    // Save Global Configs (Settings + OSS config + Notifications) to local storage for persistence
     const globalConfigToSave: Partial<AppSettings> = {
         providerConfigs: newSettings.providerConfigs,
         activeProvider: newSettings.activeProvider,
         geminiModel: newSettings.geminiModel,
         enableThinking: newSettings.enableThinking,
         bannedIps: newSettings.bannedIps,
-        ossConfig: newSettings.ossConfig
+        ossConfig: newSettings.ossConfig,
+        notificationConfig: newSettings.notificationConfig
     };
     localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
   };

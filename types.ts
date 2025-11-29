@@ -106,6 +106,12 @@ export interface OssConfig {
   autoSync: boolean;
 }
 
+export interface NotificationConfig {
+  enabled: boolean;
+  serverUrl: string;
+  deviceKey: string;
+}
+
 export interface AppSettings {
   userAvatar: string;
   userName: string;
@@ -121,6 +127,9 @@ export interface AppSettings {
   
   // Global Sync
   ossConfig?: OssConfig;
+
+  // Admin Notification
+  notificationConfig?: NotificationConfig;
 }
 
 export interface UserProfile {
