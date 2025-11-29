@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -196,7 +197,7 @@ const App: React.FC = () => {
       
       // Run once on mount if enabled
       performAutoSync();
-  }, []); // Only run once on mount
+  }, [settings.ossConfig]); // Updated dependency to listen to the full object
 
   // --- Effects for User Switching & Data Loading ---
 
@@ -242,6 +243,13 @@ const App: React.FC = () => {
               downloadUserData(mergedSettings, currentUser.id).then(cloudData => {
                   if (cloudData) {
                       console.log('User data loaded from cloud', cloudData);
+                      // Restore Chat Histories to LocalStorage so ChatWindow can find them
+                      if (cloudData.chatHistories) {
+                          Object.entries(cloudData.chatHistories).forEach(([chatId, messages]) => {
+                              localStorage.setItem(`chat_msgs_${chatId}`, JSON.stringify(messages));
+                          });
+                      }
+
                       // Merge strategy: Cloud overwrite local if exists
                       if(cloudData.chats) setChats(cloudData.chats);
                       if(cloudData.favorites) setFavorites(cloudData.favorites);
@@ -276,10 +284,26 @@ const App: React.FC = () => {
         saveTimeoutRef.current = setTimeout(() => {
             console.log('Auto-saving user data to cloud...');
             // setSyncStatus('正在保存...');
+
+            // Gather all chat histories from LocalStorage to bundle with upload
+            const chatHistories: Record<string, Message[]> = {};
+            chats.forEach(chat => {
+                const historyKey = `chat_msgs_${chat.id}`;
+                const rawMsgs = localStorage.getItem(historyKey);
+                if (rawMsgs) {
+                    try {
+                        chatHistories[chat.id] = JSON.parse(rawMsgs);
+                    } catch (e) {
+                        console.warn(`Failed to parse history for ${chat.id}`);
+                    }
+                }
+            });
+
             uploadUserData(settings, currentUser.id, {
                 chats,
                 favorites,
-                changelogs
+                changelogs,
+                chatHistories
             }).then(() => {
                 // setSyncStatus('已保存到云端');
                 // setTimeout(() => setSyncStatus(''), 2000);

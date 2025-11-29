@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatGroup, Message, Persona, AppSettings, Favorite } from '../types';
 import { USER_ID } from '../constants';
@@ -109,6 +110,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     setMessages(prev => [...prev, msg]);
   };
 
+  // Helper to trigger parent update (for lastMessage preview and Sync triggers)
+  const updateLastMessage = (text: string) => {
+      onUpdateChat({
+          ...chat,
+          lastMessage: text,
+          timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+      });
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim() || isProcessing) return;
 
@@ -126,6 +136,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       isUser: true
     };
     addMessage(userMsg);
+    
+    // Update Sidebar Preview & Trigger Sync
+    updateLastMessage(userText);
 
     // 2. Determine Order & Build Queue
     let speechQueue: Persona[] = [];
@@ -210,6 +223,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                 isUser: false
             };
             addMessage(aiMsg);
+            
+            // Update Sidebar Preview & Trigger Sync on AI response
+            updateLastMessage(responseText);
         }
     } catch (e) {
         console.error(e);
@@ -254,6 +270,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                 isUser: false
             };
             addMessage(aiMsg);
+            updateLastMessage(`【会议总结】${responseText.substring(0, 20)}...`);
       } finally {
           setIsProcessing(false);
           setProcessingSpeakerName(null);

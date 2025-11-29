@@ -1,6 +1,6 @@
 
 
-import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile } from '../types';
+import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile, Message } from '../types';
 
 // Declare global OSS if not typed
 declare global {
@@ -24,6 +24,8 @@ export interface UserCloudData {
   chats: ChatGroup[];
   favorites: Favorite[];
   changelogs: ChangelogEntry[];
+  // Store chat histories: Key = chatId, Value = Array of Messages
+  chatHistories?: Record<string, Message[]>;
 }
 
 const MAX_RETRY_TIME = 10000; // 10 seconds
@@ -167,7 +169,12 @@ export const downloadGlobalConfig = async (
 export const uploadUserData = async (
   settings: AppSettings,
   userId: string,
-  data: { chats: ChatGroup[], favorites: Favorite[], changelogs: ChangelogEntry[] }
+  data: { 
+    chats: ChatGroup[], 
+    favorites: Favorite[], 
+    changelogs: ChangelogEntry[],
+    chatHistories?: Record<string, Message[]>
+  }
 ): Promise<void> => {
   if (!settings.ossConfig?.enabled) return;
 
