@@ -292,7 +292,6 @@ const App: React.FC = () => {
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-    // CRITICAL FIX: Add settings.ossConfig to deps to ensure new users inherit global config triggers
   }, [chats, favorites, changelogs, currentUser, settings.ossConfig]);
 
 
@@ -333,6 +332,36 @@ const App: React.FC = () => {
           return;
       }
 
+      // Check Cloud for existing username FIRST to allow cross-browser login
+      if (settings.ossConfig?.enabled) {
+          try {
+              setSyncStatus('正在检查云端账号...');
+              const globalData = await downloadGlobalConfig(settings);
+              if (globalData && globalData.users) {
+                  const existingCloudUser = globalData.users.find(u => u.name === name);
+                  if (existingCloudUser) {
+                      console.log('Found existing user in cloud:', existingCloudUser);
+                      
+                      // 1. Sync local users list with cloud user
+                      setUsers(prev => {
+                          const exists = prev.find(u => u.id === existingCloudUser.id);
+                          return exists ? prev : [...prev, existingCloudUser];
+                      });
+
+                      // 2. Login as this user
+                      setCurrentUser(existingCloudUser);
+                      setSyncStatus('账号已存在，自动登录');
+                      setTimeout(() => setSyncStatus(''), 2000);
+                      
+                      // 3. Trigger notification for login (optional)
+                      return; // Exit here, do not create new user
+                  }
+              }
+          } catch (e) {
+              console.error("Failed to check cloud users, falling back to create new", e);
+          }
+      }
+
       const newUser: UserProfile = {
           id: `u_${Date.now()}`,
           name: name,
@@ -360,35 +389,29 @@ const App: React.FC = () => {
               console.log('Registering user to cloud registry...');
               
               // Use current settings context to download latest config
-              // We need to fetch the latest list to avoid overwriting recent registrations
               const globalData = await downloadGlobalConfig(settings);
               
               let usersToSave = [newUser];
               let settingsToSave = settings;
               let personasToSave = personas;
-              // Preserve admin credentials if we are not admin
               let adminAuthToSave = adminCredentials; 
 
               if (globalData) {
                   const existingUsers = globalData.users || [];
-                  // Append new user if not exists
+                  // Double check duplication to be safe
                   if (!existingUsers.find(u => u.id === newUser.id)) {
                       usersToSave = [...existingUsers, newUser];
                   } else {
                       usersToSave = existingUsers;
                   }
                   
-                  // Preserve cloud settings/personas to be safe
-                  // NOTE: This includes notificationConfig and global profile if set in cloud
                   settingsToSave = { ...settings, ...globalData.appSettings };
                   personasToSave = globalData.personas || personas;
                   
-                  // Preserve cloud admin auth
                   if (globalData.adminAuth) {
                       adminAuthToSave = globalData.adminAuth;
                   }
               } else {
-                  // Fallback to local + new if no cloud config found
                   usersToSave = [...users, newUser];
               }
 
@@ -396,7 +419,6 @@ const App: React.FC = () => {
               console.log('User registered to cloud successfully.');
           } catch (e) {
               console.error('Failed to register user to cloud registry', e);
-              // Non-blocking error: User can still use the app locally
           }
       }
   };
