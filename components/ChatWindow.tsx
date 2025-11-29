@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatGroup, Message, Persona, AppSettings, Favorite } from '../types';
 import { USER_ID } from '../constants';
@@ -16,20 +17,30 @@ interface ChatWindowProps {
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, onUpdateChat, onAddToFavorites, onBack }) => {
-  // Use a ref for messages to avoid stale closures in async loops without complex reducers
+  const STORAGE_KEY = `chat_msgs_${chat.id}`;
+
+  // Initialize state from LocalStorage or Defaults
+  // Note: Since App.tsx uses key={chat.id}, this component remounts on chat switch,
+  // so this initializer runs every time the user switches chats.
   const [messages, setMessages] = useState<Message[]>(() => {
-    // Only show the welcome message for the default demo group AND if it has no members yet
-    // If it's a real chat or favorite view, we might load differently. 
-    // Here we assume 'chat' object holds metadata, but messages are local state for this mock app.
-    // In a real app, messages would come from the 'chat' prop or an API.
-    // For this mock, we only initialize welcome message for 'group_main' if empty.
-    
-    // NOTE: For favorites viewing (readOnly), we need to handle that via a different prop or effect.
-    // Currently App.tsx passes 'chat' which is either a real chat or a mock chat for Favorites.
-    // If it is a favorite, we need to load its messages. But 'chat' interface doesn't have messages array.
-    // We will assume that if `chat.isReadOnly` is true, we need to fetch messages from somewhere?
-    // Actually, to keep it simple, let's assume `chat` prop *might* be enhanced in App.tsx to carry messages if it's a favorite.
-    // Or we rely on `useEffect` to reset messages when chat.id changes.
+    // 1. If readonly (Favorites), use the messages passed in the prop (injected via type assertion in App.tsx)
+    if ((chat as any).messages) {
+      return (chat as any).messages;
+    }
+
+    // 2. Try loading from Local Storage
+    if (!chat.isReadOnly) {
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                return JSON.parse(saved);
+            }
+        } catch (e) {
+            console.error("Failed to load chat history", e);
+        }
+    }
+
+    // 3. Default fallback for the main demo group if storage is empty
     if (chat.id === 'group_main') {
       return [{
         id: '1',
@@ -39,38 +50,22 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         isUser: false
       }];
     }
+    
+    // 4. Empty for new chats
     return [];
   });
 
-  // Hack: If this is a favorite mock chat, we need a way to pass messages into it.
-  // We'll trust that if `chat` has a property `messages` (extended type in App), we use it.
-  useEffect(() => {
-      if ((chat as any).messages) {
-          setMessages((chat as any).messages);
-      } else if (chat.id !== 'group_main') {
-          // For other normal chats, typically we'd fetch DB. Here we just clear or keep existing.
-          // Since this is a UI demo, switching chats usually resets state unless we lift state up.
-          // To fix the "empty chat on switch" issue in this demo, we'll just clear it unless it's the main one.
-          setMessages([]);
-      } else {
-          // Resetting to main group default if switching back
-          setMessages([{
-            id: '1',
-            senderId: 'moderator',
-            content: '欢迎来到 AI 圆桌会议。我是群主。请提出任何问题，我们的专家团队会为您分析。',
-            timestamp: Date.now(),
-            isUser: false
-          }]);
-      }
-  }, [chat.id]);
-
-
   const messagesRef = useRef<Message[]>(messages);
   
-  // Sync ref
+  // Sync ref and LocalStorage
   useEffect(() => {
     messagesRef.current = messages;
-  }, [messages]);
+    
+    // Save to local storage whenever messages change
+    if (!chat.isReadOnly) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    }
+  }, [messages, chat.isReadOnly, STORAGE_KEY]);
 
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -137,13 +132,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         ? chat.members 
         : (chat.id === 'group_main' ? allPersonas.map(p => p.id) : []);
     
-    let orderedIds: string[] = [];
-
     if (chat.config?.enableRandomOrder) {
-        // Shuffle memberIds
-        orderedIds = [...memberIds].sort(() => Math.random() - 0.5);
+        // Random Mode: Flatten all turns and shuffle them completely
+        memberIds.forEach(id => {
+            const persona = allPersonas.find(p => p.id === id);
+            if (persona) {
+                const replyCount = chat.config?.memberConfigs?.[id]?.replyCount || 1;
+                for (let i = 0; i < replyCount; i++) {
+                    speechQueue.push(persona);
+                }
+            }
+        });
+
+        // Fisher-Yates Shuffle
+        for (let i = speechQueue.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [speechQueue[i], speechQueue[j]] = [speechQueue[j], speechQueue[i]];
+        }
+
     } else {
-        // Use speakingOrder if exists
+        // Ordered Mode: Respect Speaking Order and Group turns (A, A, B)
+        let orderedIds: string[] = [];
         const configOrder = chat.config?.speakingOrder || [];
         
         // Ensure integrity: Start with configOrder, keep only those currently active
@@ -152,18 +161,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         // Append any active members that might be missing from the configured order (e.g. newly added)
         const missing = memberIds.filter(id => !orderedIds.includes(id));
         orderedIds = [...orderedIds, ...missing];
-    }
 
-    // 3. Populate queue with Persona objects, respecting reply counts
-    orderedIds.forEach(id => {
-       const persona = allPersonas.find(p => p.id === id);
-       if (persona) {
-           const replyCount = chat.config?.memberConfigs?.[id]?.replyCount || 1;
-           for (let i = 0; i < replyCount; i++) {
-               speechQueue.push(persona);
-           }
-       }
-    });
+        // Populate queue
+        orderedIds.forEach(id => {
+            const persona = allPersonas.find(p => p.id === id);
+            if (persona) {
+                const replyCount = chat.config?.memberConfigs?.[id]?.replyCount || 1;
+                for (let i = 0; i < replyCount; i++) {
+                    speechQueue.push(persona);
+                }
+            }
+        });
+    }
 
     // If no queue (empty chat), just stop
     if (speechQueue.length === 0) {
@@ -220,7 +229,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       
       setIsProcessing(true);
       try {
-          // Special prompt for summary
           const responseText = await generatePersonaResponse(
                 summarizer,
                 "请对上述所有讨论进行总结，提炼出核心观点和结论。",
@@ -240,6 +248,23 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       } finally {
           setIsProcessing(false);
       }
+  };
+  
+  // Clear History Logic
+  const handleClearHistory = () => {
+      // 1. Update State immediately
+      setMessages([]);
+      
+      // 2. Clear Local Storage
+      if (!chat.isReadOnly) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      }
+      
+      // 3. Update parent chat metadata (sidebar preview)
+      onUpdateChat({
+          ...chat,
+          lastMessage: ''
+      });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -282,10 +307,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   };
 
 
-  // --- existing export logic ---
+  // --- Export / Helpers ---
   
   const handleEmojiSelect = (emoji: string) => {
-      // ... same as before
       if (textareaRef.current) {
         const start = textareaRef.current.selectionStart;
         const end = textareaRef.current.selectionEnd;
@@ -304,7 +328,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // ... same as before
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -357,7 +380,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   };
 
   const handleExportText = () => {
-    // ... same as before
     const text = messages.map(msg => {
           const sender = allPersonas.find(p => p.id === msg.senderId);
           const name = msg.isUser ? (settings.userName || 'User') : (sender?.name || 'Unknown AI');
@@ -378,7 +400,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   };
 
   const handleExportImage = async () => {
-    // ... same as before
     setIsExporting(true);
       setShowExportMenu(false);
 
@@ -712,6 +733,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         onUpdateChat={onUpdateChat}
         messages={messages} // Pass full history
         settings={settings} // Pass settings for API
+        onClearHistory={handleClearHistory}
       />
     </div>
   );

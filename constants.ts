@@ -1,5 +1,3 @@
-
-
 import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry, AppSettings } from './types';
 
 export const USER_ID = 'user-me';
@@ -196,5 +194,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   geminiModel: 'gemini-2.5-flash',
   enableThinking: false,
   activeProvider: 'gemini',
-  providerConfigs: DEFAULT_PROVIDER_CONFIGS
+  providerConfigs: DEFAULT_PROVIDER_CONFIGS,
+  bannedIps: []
 };

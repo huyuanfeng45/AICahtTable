@@ -105,4 +105,16 @@ export interface AppSettings {
   // New Multi-provider support
   activeProvider: ProviderId; // Default/Global provider
   providerConfigs: Record<ProviderId, ProviderConfig>;
+  
+  // Admin Security
+  bannedIps: string[];
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  avatar: string;
+  createdAt: number;
+  lastIp?: string; // Recorded IP
+  isBanned?: boolean; // Explicit ban status
 }

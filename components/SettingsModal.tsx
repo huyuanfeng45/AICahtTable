@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
-import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption } from '../types';
+import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
+import { generateRandomPersonaDetails } from '../services/geminiService';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -14,9 +16,16 @@ interface SettingsModalProps {
   adminCredentials: { username: string; password: string };
   onUpdateAdminCredentials: (creds: { username: string; password: string }) => void;
   onLogout: () => void;
+  onSwitchUser: () => void;
+  
+  // User Management
+  allUsers?: UserProfile[];
+  onAdminUpdateUser?: (userId: string, updates: Partial<UserProfile>) => void;
+  onAdminDeleteUser?: (userId: string) => void;
+  onAdminToggleBanIp?: (ip: string) => void;
 }
 
-type Tab = 'profile' | 'models' | 'characters';
+type Tab = 'profile' | 'models' | 'characters' | 'users';
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ 
   isOpen, 
@@ -29,11 +38,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onLoginSuccess,
   adminCredentials,
   onUpdateAdminCredentials,
-  onLogout
+  onLogout,
+  onSwitchUser,
+  allUsers,
+  onAdminUpdateUser,
+  onAdminDeleteUser,
+  onAdminToggleBanIp
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
   
   // Local state for edits
   const [localAvatar, setLocalAvatar] = useState(settings.userAvatar);
@@ -52,12 +64,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   // Local Personas State
   const [localPersonas, setLocalPersonas] = useState<Persona[]>(personas);
   const [editingPersonaId, setEditingPersonaId] = useState<string | null>(null);
+  const [isGeneratingPersona, setIsGeneratingPersona] = useState(false);
 
   const [isFetchingModels, setIsFetchingModels] = useState<Record<string, boolean>>({});
   const [fetchError, setFetchError] = useState<Record<string, string>>({});
   const [exportedCode, setExportedCode] = useState<string | null>(null);
 
-  const [error, setError] = useState('');
+  // User Management State
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editUserName, setEditUserName] = useState('');
 
   // Sync props to local state when opening
   useEffect(() => {
@@ -74,16 +89,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen, settings, personas, adminCredentials]);
 
-  if (!isOpen) return null;
+  // Reset tab if not authenticated and on restricted tab
+  useEffect(() => {
+      if (!isAuthenticated && (activeTab === 'models' || activeTab === 'characters' || activeTab === 'users')) {
+          setActiveTab('profile');
+      }
+  }, [isAuthenticated, activeTab]);
 
-  const handleLogin = () => {
-    if (username === adminCredentials.username && password === adminCredentials.password) {
-      onLoginSuccess();
-      setError('');
-    } else {
-      setError('用户名或密码错误');
-    }
-  };
+  if (!isOpen) return null;
 
   const handleSave = () => {
     onUpdateSettings({
@@ -95,20 +108,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       activeProvider: localActiveProvider,
       providerConfigs: localProviderConfigs
     });
-    onUpdatePersonas(localPersonas);
-    onUpdateAdminCredentials({ username: localAdminUsername, password: localAdminPassword });
+    
+    // Only update personas/admin-creds if Admin
+    if (isAuthenticated) {
+        onUpdatePersonas(localPersonas);
+        onUpdateAdminCredentials({ username: localAdminUsername, password: localAdminPassword });
+    }
+    
     onClose();
   };
 
   const handleExportDefaults = () => {
-      // Construct current settings object to export
       const currentConfig: AppSettings = {
           userAvatar: localAvatar,
           userName: localUserName,
           geminiModel: localGeminiModel,
           enableThinking: localEnableThinking,
           activeProvider: localActiveProvider,
-          providerConfigs: localProviderConfigs
+          providerConfigs: localProviderConfigs,
+          bannedIps: settings.bannedIps
       };
       
       const code = `// 请将下方代码复制到 constants.ts 并覆盖 DEFAULT_APP_SETTINGS 变量\n\nexport const DEFAULT_APP_SETTINGS: AppSettings = ${JSON.stringify(currentConfig, null, 2)};`;
@@ -136,7 +154,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setFetchError(prev => ({ ...prev, [providerId]: '' }));
 
     try {
-      // Clean URL: remove trailing slash
       const baseUrl = config.baseUrl.replace(/\/$/, '');
       let url = `${baseUrl}/models`;
       
@@ -155,11 +172,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       const data = await response.json();
       let models: ModelOption[] = [];
 
-      // OpenAI compatible standard: { data: [{ id: '...', ... }] }
       if (data.data && Array.isArray(data.data)) {
         models = data.data.map((m: any) => ({
           id: m.id,
-          name: m.id // Use ID as name if name not present
+          name: m.id 
         }));
       } else {
          throw new Error('Unrecognized response format');
@@ -170,8 +186,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       }
 
       updateProviderConfig(providerId, 'fetchedModels', models);
-      
-      setFetchError(prev => ({ ...prev, [providerId]: '' })); // clear error
+      setFetchError(prev => ({ ...prev, [providerId]: '' }));
     } catch (err) {
       console.error(err);
       setFetchError(prev => ({ ...prev, [providerId]: `失败: ${err instanceof Error ? err.message : String(err)}` }));
@@ -220,57 +235,175 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             config: { 
                 ...p.config,
                 [field]: value,
-                // If provider changes, reset model to first one of that provider
                 ...(field === 'provider' ? { modelId: MODEL_PROVIDERS.find(prov => prov.id === value)?.models[0].id || '' } : {})
             } 
         } : p
     ));
   };
+  
+  const handleAIGeneratePersona = async () => {
+    if (!editingPersonaId) return;
+    setIsGeneratingPersona(true);
+    try {
+        const details = await generateRandomPersonaDetails(settings);
+        
+        // Random Provider/Model from constants (assuming all keys available, otherwise use defaults)
+        const randomProvider = MODEL_PROVIDERS[Math.floor(Math.random() * MODEL_PROVIDERS.length)];
+        const randomModel = randomProvider.models[Math.floor(Math.random() * randomProvider.models.length)];
+        
+        // Avatar
+        const encodedPrompt = encodeURIComponent(details.avatarPrompt);
+        const avatarUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=200&height=200&nologo=true`;
 
+        // Update current editing persona
+        setLocalPersonas(prev => prev.map(p => {
+            if (p.id === editingPersonaId) {
+                return {
+                    ...p,
+                    name: details.name,
+                    role: randomModel.name, // Use Model Name as Role
+                    systemInstruction: details.systemInstruction,
+                    avatar: avatarUrl,
+                    config: {
+                        provider: randomProvider.id,
+                        modelId: randomModel.id
+                    }
+                };
+            }
+            return p;
+        }));
 
-  const renderLogin = () => (
-    <div className="flex flex-col h-full justify-center">
-      <div className="bg-yellow-50 text-yellow-800 p-3 rounded text-sm mb-6 flex items-center">
-         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-         访问此区域需要管理员权限
+    } catch (e) {
+        console.error(e);
+        alert("生成失败，请检查网络设置或 API Key");
+    } finally {
+        setIsGeneratingPersona(false);
+    }
+  };
+
+  // --- User Logic ---
+  const startEditingUser = (user: UserProfile) => {
+      setEditingUserId(user.id);
+      setEditUserName(user.name);
+  };
+
+  const saveUserEdit = () => {
+      if (editingUserId && onAdminUpdateUser) {
+          onAdminUpdateUser(editingUserId, { name: editUserName });
+          setEditingUserId(null);
+      }
+  };
+
+  const renderUsersTab = () => (
+      <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+                <h3 className="text-lg font-medium text-gray-900">用户管理 (User Management)</h3>
+                <p className="text-xs text-gray-500">管理已注册用户、IP 记录与封禁状态。</p>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto custom-scrollbar border border-gray-200 rounded-lg">
+              <table className="w-full text-sm text-left text-gray-500">
+                  <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                      <tr>
+                          <th scope="col" className="px-4 py-3">用户</th>
+                          <th scope="col" className="px-4 py-3">注册时间</th>
+                          <th scope="col" className="px-4 py-3">Last IP</th>
+                          <th scope="col" className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {allUsers?.map(user => {
+                          const isBanned = user.lastIp && settings.bannedIps?.includes(user.lastIp);
+                          const isEditing = editingUserId === user.id;
+
+                          return (
+                              <tr key={user.id} className="bg-white border-b hover:bg-gray-50">
+                                  <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap flex items-center gap-3">
+                                      <img src={user.avatar} className="w-8 h-8 rounded-full bg-gray-200" />
+                                      {isEditing ? (
+                                          <div className="flex items-center gap-1">
+                                              <input 
+                                                  type="text" 
+                                                  value={editUserName} 
+                                                  onChange={(e) => setEditUserName(e.target.value)}
+                                                  className="border border-gray-300 rounded px-2 py-1 text-xs w-24"
+                                              />
+                                              <button onClick={saveUserEdit} className="text-green-600 hover:text-green-800">
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                                              </button>
+                                              <button onClick={() => setEditingUserId(null)} className="text-gray-400 hover:text-gray-600">
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                              </button>
+                                          </div>
+                                      ) : (
+                                          <span>{user.name}</span>
+                                      )}
+                                      {user.id === 'admin_root' && <span className="text-[10px] bg-gray-100 text-gray-500 px-1 rounded">Admin</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-xs">
+                                      {new Date(user.createdAt).toLocaleDateString()}
+                                  </td>
+                                  <td className="px-4 py-3 font-mono text-xs">
+                                      {user.lastIp || 'N/A'}
+                                      {isBanned && <span className="ml-2 bg-red-100 text-red-600 text-[10px] px-1.5 rounded">BANNED</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                      {user.id !== 'admin_root' && (
+                                          <div className="flex items-center justify-end gap-2">
+                                              <button 
+                                                  onClick={() => startEditingUser(user)}
+                                                  className="text-blue-600 hover:underline text-xs"
+                                              >
+                                                  改名
+                                              </button>
+                                              <button 
+                                                  onClick={() => onAdminToggleBanIp && user.lastIp && onAdminToggleBanIp(user.lastIp)}
+                                                  className={`text-xs hover:underline ${isBanned ? 'text-green-600' : 'text-orange-600'}`}
+                                                  disabled={!user.lastIp}
+                                              >
+                                                  {isBanned ? '解封 IP' : '封禁 IP'}
+                                              </button>
+                                              <button 
+                                                  onClick={() => {
+                                                      if(window.confirm(`确定删除用户 ${user.name} 吗? 数据不可恢复。`)) {
+                                                          onAdminDeleteUser && onAdminDeleteUser(user.id);
+                                                      }
+                                                  }}
+                                                  className="text-red-600 hover:underline text-xs"
+                                              >
+                                                  删除
+                                              </button>
+                                          </div>
+                                      )}
+                                  </td>
+                              </tr>
+                          );
+                      })}
+                  </tbody>
+              </table>
+          </div>
       </div>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">账号</label>
-          <input 
-            type="text" 
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 transition-shadow"
-            placeholder="请输入账号"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">密码</label>
-          <input 
-            type="password" 
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 transition-shadow"
-            placeholder="请输入密码"
-            onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-          />
-        </div>
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        <button 
-          onClick={handleLogin}
-          className="w-full bg-[#07c160] text-white py-2.5 rounded hover:bg-[#06ad56] transition-colors font-medium mt-2"
-        >
-          登录后台
-        </button>
-      </div>
-    </div>
   );
 
   const renderProfileTab = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
         <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-4">个人资料</h3>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">个人资料</h3>
+                <button 
+                    onClick={() => {
+                        onClose();
+                        onSwitchUser();
+                    }}
+                    className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors"
+                >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                    切换账号 / Switch Account
+                </button>
+            </div>
+
             <div className="flex flex-col items-center mb-6">
               <div className="relative group cursor-pointer">
                 <img 
@@ -308,63 +441,68 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
             </div>
 
-            <div className="pt-4 border-t border-gray-100 mt-6">
-               <h4 className="text-sm font-medium text-gray-900 mb-3">管理员账号设置</h4>
-               <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">账号</label>
-                    <input 
-                        type="text" 
-                        value={localAdminUsername}
-                        onChange={(e) => setLocalAdminUsername(e.target.value)}
-                        className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                    />
-                  </div>
-                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">密码</label>
-                    <input 
-                        type="text" 
-                        value={localAdminPassword}
-                        onChange={(e) => setLocalAdminPassword(e.target.value)}
-                        className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
-                    />
-                  </div>
-                  <div className="text-[10px] text-orange-600 flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                      修改此处将更新登录后台所需的凭证
-                  </div>
-               </div>
-            </div>
+            {isAuthenticated && (
+                <div className="pt-4 border-t border-gray-100 mt-6">
+                   <h4 className="text-sm font-medium text-gray-900 mb-3">管理员账号设置</h4>
+                   <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 space-y-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">账号</label>
+                        <input 
+                            type="text" 
+                            value={localAdminUsername}
+                            onChange={(e) => setLocalAdminUsername(e.target.value)}
+                            className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                        />
+                      </div>
+                       <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">密码</label>
+                        <input 
+                            type="text" 
+                            value={localAdminPassword}
+                            onChange={(e) => setLocalAdminPassword(e.target.value)}
+                            className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
+                        />
+                      </div>
+                      <div className="text-[10px] text-orange-600 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                          修改此处将更新登录后台所需的凭证
+                      </div>
+                   </div>
+                </div>
+            )}
             
-            {/* Export Config Section */}
-            <div className="pt-4 border-t border-gray-100 mt-6">
-               <h4 className="text-sm font-medium text-gray-900 mb-2">部署配置</h4>
-               <p className="text-xs text-gray-500 mb-3">将当前的个人设置、API 配置和模型选择导出为系统默认值。部署后，所有新用户将默认使用此配置。</p>
-               <button 
-                  onClick={handleExportDefaults}
-                  className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
-               >
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                   导出为系统默认配置 (Export Defaults)
-               </button>
-            </div>
+            {isAuthenticated && (
+                <div className="pt-4 border-t border-gray-100 mt-6">
+                   <h4 className="text-sm font-medium text-gray-900 mb-2">部署配置</h4>
+                   <p className="text-xs text-gray-500 mb-3">将当前的个人设置、API 配置和模型选择导出为系统默认值。部署后，所有新用户将默认使用此配置。</p>
+                   <button 
+                      onClick={handleExportDefaults}
+                      className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
+                   >
+                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                       导出为系统默认配置 (Export Defaults)
+                   </button>
+                </div>
+            )}
             
-            <div className="pt-2">
-                 <button 
-                    onClick={onLogout}
-                    className="text-xs text-red-500 hover:text-red-700 hover:underline"
-                 >
-                    退出管理员登录
-                 </button>
-            </div>
+            {isAuthenticated && (
+                <div className="pt-2">
+                     <button 
+                        onClick={onLogout}
+                        className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                     >
+                        退出管理员登录
+                     </button>
+                </div>
+            )}
         </div>
     </div>
   );
 
   const renderModelsTab = () => (
     <div className="space-y-6 h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
-       <h3 className="text-lg font-medium text-gray-900">大模型接入配置</h3>
-       <p className="text-xs text-gray-500 -mt-3">在此配置 API Key 和默认参数。点击“获取模型”可从 URL 拉取可用列表。</p>
+       <h3 className="text-lg font-medium text-gray-900">大模型接入配置 (Admin)</h3>
+       <p className="text-xs text-gray-500 -mt-3">在此配置全局 API Key 和默认参数。所有用户的对话将使用此配置。</p>
        
        <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 space-y-6 pb-6">
            {MODEL_PROVIDERS.map(provider => {
@@ -372,7 +510,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
              const config = localProviderConfigs[provider.id];
              const isGemini = provider.id === 'gemini';
              
-             // Use fetched models if available, otherwise default static list
              const availableModels = config.fetchedModels && config.fetchedModels.length > 0 
                 ? config.fetchedModels 
                 : provider.models;
@@ -386,7 +523,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     : 'border-gray-200 bg-white hover:border-gray-300'
                 }`}
               >
-                 {/* Header */}
                  <div className="flex items-center justify-between mb-4">
                      <div className="flex items-center gap-3">
                          <img src={provider.icon} alt={provider.name} className="w-8 h-8 rounded-md" />
@@ -410,10 +546,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                      </button>
                  </div>
 
-                 {/* Inputs */}
                  <div className={`space-y-3`}>
-                    
-                    {/* API Fields */}
                     {provider.fields.map(field => (
                         <div key={field.key}>
                         <label className="block text-xs font-medium text-gray-600 mb-1">{field.label}</label>
@@ -427,12 +560,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                     ))}
 
-                    {/* Model Fetching & Selection */}
                     <div className="pt-1">
                         <div className="flex items-end gap-2 mb-1">
                             <label className="block text-xs font-medium text-gray-600">默认模型</label>
-                            
-                            {/* Fetch Button (Only if URL/Key fields exist) */}
                             {provider.fields.length > 0 && (
                                 <button 
                                     onClick={() => handleFetchModels(provider.id)}
@@ -454,7 +584,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                     <option key={m.id} value={m.id}>{m.name}</option>
                                 ))}
                             </select>
-                            {/* Indicator for fetched models */}
                             {config.fetchedModels && config.fetchedModels.length > 0 && (
                                 <div className="absolute right-8 top-1/2 transform -translate-y-1/2 pointer-events-none">
                                     <span className="text-[10px] bg-blue-100 text-blue-600 px-1 rounded">API Fetched</span>
@@ -462,12 +591,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             )}
                         </div>
 
-                        {/* Error Message */}
                         {fetchError[provider.id] && (
                             <p className="text-[10px] text-red-500 mt-1">{fetchError[provider.id]}</p>
                         )}
 
-                        {/* Gemini Thinking Checkbox */}
                         {isGemini && (
                             <div className="flex items-center mt-2">
                                 <input 
@@ -500,7 +627,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         const currentProvider = editingPersona.config?.provider || 'gemini';
         const providerConfig = localProviderConfigs[currentProvider];
         
-        // Dynamic model list for the persona dropdown
         const availableModels = providerConfig.fetchedModels && providerConfig.fetchedModels.length > 0
             ? providerConfig.fetchedModels
             : MODEL_PROVIDERS.find(p => p.id === currentProvider)?.models || [];
@@ -512,10 +638,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                     </button>
                     <h3 className="text-lg font-medium text-gray-900">编辑角色: {editingPersona.name}</h3>
+                    
+                    {/* AI Generate Button */}
+                    <button 
+                        onClick={handleAIGeneratePersona}
+                        disabled={isGeneratingPersona}
+                        className="ml-auto text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
+                        title="AI 自动生成头像、名称、人设和随机模型配置"
+                    >
+                       {isGeneratingPersona ? (
+                           <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                       ) : (
+                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                       )}
+                       AI 一键生成
+                    </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
-                     {/* Basic Info */}
                      <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2 flex items-center gap-4 mb-2">
                             <img src={editingPersona.avatar} className="w-16 h-16 rounded-md bg-gray-200 object-cover border" />
@@ -549,7 +689,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                      </div>
 
-                     {/* System Prompt */}
                      <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">人设指令 (System Instruction)</label>
                         <textarea 
@@ -562,7 +701,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                      <div className="border-t border-gray-100 my-4"></div>
 
-                     {/* Model Config */}
                      <div>
                         <h4 className="text-sm font-semibold text-gray-800 mb-3">模型配置</h4>
                         <div className="grid grid-cols-2 gap-4">
@@ -605,7 +743,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
              <div className="flex items-center justify-between mb-4">
                 <div>
-                    <h3 className="text-lg font-medium text-gray-900">角色管理</h3>
+                    <h3 className="text-lg font-medium text-gray-900">角色管理 (Admin)</h3>
                     <p className="text-xs text-gray-500">创建并配置参与讨论的 AI 角色。</p>
                 </div>
                 <button 
@@ -665,6 +803,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="w-[180px] bg-gray-50 border-r border-gray-200 flex flex-col pt-6 pb-4 flex-shrink-0">
             <div className="px-6 mb-8">
                 <h2 className="text-lg font-bold text-gray-800">设置</h2>
+                {!isAuthenticated && (
+                    <p className="text-[10px] text-gray-400 mt-1">普通用户模式</p>
+                )}
             </div>
             
             <nav className="flex-1 space-y-1 px-3">
@@ -679,28 +820,46 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     个人资料
                 </button>
-                <button 
-                  onClick={() => setActiveTab('models')}
-                  className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    activeTab === 'models' 
-                      ? 'bg-white text-green-600 shadow-sm' 
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                    <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                    模型接入
-                </button>
-                <button 
-                  onClick={() => setActiveTab('characters')}
-                  className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    activeTab === 'characters' 
-                      ? 'bg-white text-green-600 shadow-sm' 
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
-                >
-                    <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                    角色管理
-                </button>
+                
+                {isAuthenticated && (
+                    <>
+                    <button 
+                    onClick={() => setActiveTab('models')}
+                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'models' 
+                        ? 'bg-white text-green-600 shadow-sm' 
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        模型接入
+                    </button>
+                    
+                    <button 
+                    onClick={() => setActiveTab('characters')}
+                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'characters' 
+                        ? 'bg-white text-green-600 shadow-sm' 
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        角色管理
+                    </button>
+
+                    <button 
+                    onClick={() => setActiveTab('users')}
+                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                        activeTab === 'users' 
+                        ? 'bg-white text-green-600 shadow-sm' 
+                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                        用户管理
+                    </button>
+                    </>
+                )}
             </nav>
 
             <div className="px-6 mt-auto">
@@ -721,32 +880,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
             {/* Content Area */}
             <div className="flex-1 px-8 pb-8 overflow-hidden flex flex-col">
-                {!isAuthenticated ? renderLogin() : (
-                    <>
-                        {activeTab === 'profile' && renderProfileTab()}
-                        {activeTab === 'models' && renderModelsTab()}
-                        {activeTab === 'characters' && renderCharactersTab()}
-                    </>
-                )}
+                <>
+                    {activeTab === 'profile' && renderProfileTab()}
+                    {activeTab === 'models' && isAuthenticated && renderModelsTab()}
+                    {activeTab === 'characters' && isAuthenticated && renderCharactersTab()}
+                    {activeTab === 'users' && isAuthenticated && renderUsersTab()}
+                </>
             </div>
 
-            {/* Footer Actions (Only if authenticated) */}
-            {isAuthenticated && (
-                <div className="px-8 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
-                    <button 
-                      onClick={onClose}
-                      className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
-                    >
-                      取消
-                    </button>
-                    <button 
-                      onClick={handleSave}
-                      className="px-4 py-2 text-sm bg-[#07c160] text-white rounded hover:bg-[#06ad56] shadow-sm font-medium transition-colors"
-                    >
-                      保存设置
-                    </button>
-                </div>
-            )}
+            {/* Footer Actions */}
+            <div className="px-8 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
+                <button 
+                    onClick={onClose}
+                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium"
+                >
+                    取消
+                </button>
+                <button 
+                    onClick={handleSave}
+                    className="px-4 py-2 text-sm bg-[#07c160] text-white rounded hover:bg-[#06ad56] shadow-sm font-medium transition-colors"
+                >
+                    保存设置
+                </button>
+            </div>
             
             {/* Export Code Modal Overlay */}
             {exportedCode && (

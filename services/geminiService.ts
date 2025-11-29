@@ -68,6 +68,42 @@ export const generatePersonaResponse = async (
   // For model, if persona has a specific one, use it. Otherwise use the default from that provider's config
   const modelId = persona.config?.modelId || globalConfig.selectedModel;
 
+  // --- Logic for Multi-turn Self-Reference ---
+  // Detect if this persona has already spoken since the last user message.
+  let selfPreviousMessages: string[] = [];
+  let lastUserIndex = -1;
+  // Find the index of the last message sent by a user
+  for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].isUser) {
+          lastUserIndex = i;
+          break;
+      }
+  }
+
+  // If a user message exists, look at messages after it
+  if (lastUserIndex !== -1) {
+      const recentMessages = history.slice(lastUserIndex + 1);
+      selfPreviousMessages = recentMessages
+          .filter(m => m.senderId === persona.id)
+          .map(m => m.content);
+  }
+
+  let multiTurnInstruction = "";
+  if (selfPreviousMessages.length > 0) {
+      multiTurnInstruction = `
+      [特别指令 / Special Instruction]
+      检测到你在当前针对用户问题 "${currentPrompt}" 的讨论中，已经有过 ${selfPreviousMessages.length} 次发言。
+      你之前的发言内容是: ${JSON.stringify(selfPreviousMessages)}
+      
+      此次发言必须遵守以下规则：
+      1. 继续回应用户的提问 "${currentPrompt}"。
+      2. 必须回应或结合你自己之前的发言（Self-reference），进行补充、延伸或连贯的逻辑阐述。
+      3. 语气要自然，模拟在群聊中连续发送多条消息的感觉（例如：“另外...”、“还有就是...”）。
+      4. 不要单纯重复你之前已经说过的观点。
+      `;
+  }
+  // -------------------------------------------
+
   // --- GOOGLE GEMINI NATIVE PATH ---
   if (providerId === 'gemini') {
     // Prefer settings API Key, then env
@@ -92,6 +128,8 @@ export const generatePersonaResponse = async (
         
         用户刚才提问: "${currentPrompt}"
         
+        ${multiTurnInstruction}
+
         轮到你发言了。
         请记住你的设定: ${persona.systemInstruction}
         
@@ -139,7 +177,11 @@ export const generatePersonaResponse = async (
        };
     });
 
-    messages.push({ role: 'user', content: currentPrompt });
+    // Append current prompt with special instruction if needed
+    messages.push({ 
+        role: 'user', 
+        content: currentPrompt + (multiTurnInstruction ? `\n\n${multiTurnInstruction}` : "")
+    });
 
     try {
       return await callOpenAICompatibleAPI(persona, messages, config, modelId);
@@ -242,5 +284,60 @@ export const generateImagePrompt = async (
   } catch (e) {
       console.error("Generate image prompt failed", e);
       return "abstract art";
+  }
+};
+
+/**
+ * Generates a random persona for a chat room.
+ */
+export const generateRandomPersonaDetails = async (
+  settings: AppSettings
+): Promise<{ name: string; role: string; systemInstruction: string; avatarPrompt: string }> => {
+  const providerId = settings.activeProvider;
+  const config = settings.providerConfigs[providerId];
+  const modelId = config.selectedModel;
+
+  const prompt = `
+    Design a unique, interesting, and distinct AI character persona for a chat room.
+    The character should have a specific personality, expertise, or quirk.
+    
+    Return the result strictly as a valid JSON object with the following keys:
+    {
+      "name": "Name of the character (in Chinese, max 5 chars)",
+      "role": "Short role description (in Chinese, e.g. 'Science Fiction Writer', 'Cat Lover', max 8 chars)",
+      "systemInstruction": "Detailed system instruction for the AI to roleplay this character (in Chinese, about 50-100 words). Describe tone, style, and behavior.",
+      "avatarPrompt": "A short English visual description for the character's avatar (e.g. 'cyberpunk cat with neon glasses', 'old wise wizard', max 10 words)"
+    }
+    Do not include markdown formatting like \`\`\`json. Just the raw JSON string.
+  `;
+
+  try {
+      let jsonStr = "";
+      if (providerId === 'gemini') {
+          const apiKey = config.apiKey || process.env.API_KEY || '';
+          if (!apiKey) throw new Error("Missing API Key");
+          const ai = new GoogleGenAI({ apiKey });
+          
+          const response = await ai.models.generateContent({
+            model: modelId,
+            contents: prompt,
+            config: { responseMimeType: "application/json" } 
+          });
+          jsonStr = response.text || "{}";
+      } else {
+          const messages = [{ role: 'user', content: prompt }];
+          jsonStr = await callOpenAICompatibleAPI(null, messages, config, modelId);
+      }
+      
+      const cleanJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(cleanJson);
+  } catch (e) {
+      console.error("Generate persona failed", e);
+      return {
+          name: "神秘客",
+          role: "Unknown",
+          systemInstruction: "你是一个神秘的AI助手，性格捉摸不透。",
+          avatarPrompt: "mystery silhouette in fog"
+      };
   }
 };

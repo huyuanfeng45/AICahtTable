@@ -9,8 +9,9 @@ import ChatWindow from './components/ChatWindow';
 import ChangelogView from './components/ChangelogView';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
+import AuthModal from './components/AuthModal';
 import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
-import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry } from './types';
+import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, UserProfile } from './types';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
@@ -32,94 +33,231 @@ function loadState<T>(key: string, defaultValue: T): T {
   }
 }
 
-const App: React.FC = () => {
-  // Default to the first chat (the AI group)
-  // We use functional initialization to load from localStorage if available
-  const [chats, setChats] = useState<ChatGroup[]>(() => loadState('app_chats', MOCK_CHATS));
-  const [selectedChatId, setSelectedChatId] = useState(chats.length > 0 ? chats[0].id : '');
+// Mock IP Generator
+const generateMockIp = () => {
+    return `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
+};
 
+const App: React.FC = () => {
+  // User Management State
+  const [users, setUsers] = useState<UserProfile[]>(() => loadState('app_users', []));
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+
+  // --- Data State (Dependent on currentUser) ---
+  const [chats, setChats] = useState<ChatGroup[]>([]);
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [changelogs, setChangelogs] = useState<ChangelogEntry[]>([]);
+  
+  // App Settings - Loaded per user (preference) or global default
+  const [settings, setSettings] = useState<AppSettings>(() => {
+      // Load global banned IPs immediately to prevent flash of unbanned state
+      const global = loadState<Partial<AppSettings>>('app_global_settings', {});
+      return {
+          ...DEFAULT_APP_SETTINGS,
+          bannedIps: global.bannedIps || []
+      };
+  });
+  
+  // Selection State
+  const [selectedChatId, setSelectedChatId] = useState('');
+  const [selectedFavoriteId, setSelectedFavoriteId] = useState<string | null>(null);
+  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+
+  // UI State
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  
-  // Mobile UI state
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
-  
-  // Authentication State
+  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
+  const [aboutContent, setAboutContent] = useState(INITIAL_ABOUT_CONTENT);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog'>('chats');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Admin Auth (for global settings)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [adminCredentials, setAdminCredentials] = useState({ username: 'admin', password: '123456' });
 
-  // Sidebar Tab State
-  const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog'>('chats');
-
-  // About Modal State
-  const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
-  const [aboutContent, setAboutContent] = useState(INITIAL_ABOUT_CONTENT);
-
-  // Manage Personas State (Editable)
+  // Manage Personas State (Global for now, but editable)
   const [personas, setPersonas] = useState<Persona[]>(() => loadState('app_personas', AI_PERSONAS));
 
-  // Manage Favorites State
-  const [favorites, setFavorites] = useState<Favorite[]>(() => loadState('app_favorites', []));
-  const [selectedFavoriteId, setSelectedFavoriteId] = useState<string | null>(null);
 
-  // Manage Changelogs State
-  const [changelogs, setChangelogs] = useState<ChangelogEntry[]>(() => loadState('app_changelogs', MOCK_CHANGELOGS));
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(changelogs.length > 0 ? changelogs[0].id : null);
+  // --- Effects for User Switching & Data Loading ---
 
-  // Search State
-  const [searchQuery, setSearchQuery] = useState('');
+  // Load user-specific data when currentUser changes
+  useEffect(() => {
+      if (currentUser) {
+          // Load User Data
+          setChats(loadState(`app_chats_${currentUser.id}`, MOCK_CHATS));
+          setFavorites(loadState(`app_favorites_${currentUser.id}`, []));
+          setChangelogs(loadState(`app_changelogs_${currentUser.id}`, MOCK_CHANGELOGS));
+          
+          // Load Settings logic with Global Config inheritance
+          const savedUserSettings = loadState<AppSettings | null>(`app_settings_${currentUser.id}`, null);
+          const savedGlobalSettings = loadState<Partial<AppSettings>>('app_global_settings', {});
+          
+          // Merge logic
+          const mergedSettings: AppSettings = {
+              ...DEFAULT_APP_SETTINGS,
+              ...savedUserSettings,
+              // Force override global configs
+              providerConfigs: savedGlobalSettings.providerConfigs || (savedUserSettings?.providerConfigs || DEFAULT_APP_SETTINGS.providerConfigs),
+              activeProvider: savedGlobalSettings.activeProvider || (savedUserSettings?.activeProvider || DEFAULT_APP_SETTINGS.activeProvider),
+              geminiModel: savedGlobalSettings.geminiModel || (savedUserSettings?.geminiModel || DEFAULT_APP_SETTINGS.geminiModel),
+              enableThinking: savedGlobalSettings.enableThinking ?? (savedUserSettings?.enableThinking ?? DEFAULT_APP_SETTINGS.enableThinking),
+              bannedIps: savedGlobalSettings.bannedIps || [],
+              
+              // Ensure user profile is preserved
+              userName: savedUserSettings?.userName || currentUser.name,
+              userAvatar: savedUserSettings?.userAvatar || currentUser.avatar,
+          };
+          
+          setSettings(mergedSettings);
 
-  // App Settings State - Persisted
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = loadState<AppSettings | null>('app_settings', null);
-    // Use defaults if no saved settings
-    if (!saved) {
-      return DEFAULT_APP_SETTINGS;
-    }
-    // Deep merge providerConfigs to handle new providers in code updates
-    return {
-        ...DEFAULT_APP_SETTINGS,
-        ...saved,
-        providerConfigs: {
-            ...DEFAULT_APP_SETTINGS.providerConfigs,
-            ...(saved.providerConfigs || {})
-        }
-    };
-  });
-
-  // Persist state changes
-  useEffect(() => { localStorage.setItem('app_chats', JSON.stringify(chats)); }, [chats]);
-  useEffect(() => { localStorage.setItem('app_personas', JSON.stringify(personas)); }, [personas]);
-  useEffect(() => { localStorage.setItem('app_favorites', JSON.stringify(favorites)); }, [favorites]);
-  useEffect(() => { localStorage.setItem('app_changelogs', JSON.stringify(changelogs)); }, [changelogs]);
-  useEffect(() => { localStorage.setItem('app_settings', JSON.stringify(settings)); }, [settings]);
-
-
-  // Derived Active Content
-  let activeContent = null;
-  let activeLog = null;
-
-  if (activeSidebarTab === 'favorites') {
-      if (selectedFavoriteId) {
-          const fav = favorites.find(f => f.id === selectedFavoriteId);
-          if (fav) {
-             // Construct a Read-Only ChatGroup Object for viewing
-             activeContent = {
-                 id: fav.id,
-                 name: fav.title,
-                 avatar: 'https://ui-avatars.com/api/?name=F&background=orange&color=fff',
-                 members: [],
-                 isReadOnly: true,
-                 type: 'group',
-                 // Hack: attach messages directly for ChatWindow to consume
-                 messages: fav.messages 
-             } as unknown as ChatGroup;
-          }
+          // Reset selection
+          setSelectedChatId('');
+          setSelectedFavoriteId(null);
+          setSelectedLogId(null);
+          setActiveSidebarTab('chats');
       }
-  } else if (activeSidebarTab === 'changelog') {
-      activeLog = changelogs.find(l => l.id === selectedLogId);
-  } else {
-      activeContent = chats.find(c => c.id === selectedChatId);
-  }
+  }, [currentUser]);
+
+  // Persist Users List
+  useEffect(() => { localStorage.setItem('app_users', JSON.stringify(users)); }, [users]);
+  
+  // Persist Global Personas
+  useEffect(() => { localStorage.setItem('app_personas', JSON.stringify(personas)); }, [personas]);
+
+  // Persist User-Specific Data
+  useEffect(() => { 
+      if(currentUser) localStorage.setItem(`app_chats_${currentUser.id}`, JSON.stringify(chats)); 
+  }, [chats, currentUser]);
+
+  useEffect(() => { 
+      if(currentUser) localStorage.setItem(`app_favorites_${currentUser.id}`, JSON.stringify(favorites)); 
+  }, [favorites, currentUser]);
+
+  useEffect(() => { 
+      if(currentUser) localStorage.setItem(`app_changelogs_${currentUser.id}`, JSON.stringify(changelogs)); 
+  }, [changelogs, currentUser]);
+  
+  useEffect(() => { 
+      // We save user-specific settings (like avatar/name) to their own key
+      if(currentUser) localStorage.setItem(`app_settings_${currentUser.id}`, JSON.stringify(settings)); 
+  }, [settings, currentUser]);
+
+
+  // --- Handlers ---
+
+  const handleRegister = (name: string) => {
+      const mockIp = generateMockIp();
+      
+      // Check Ban
+      const globalSettings = loadState<Partial<AppSettings>>('app_global_settings', {});
+      const banned = globalSettings.bannedIps || [];
+      if (banned.includes(mockIp)) {
+          alert("禁止访问：您的 IP 地址已被封禁。");
+          return;
+      }
+
+      const newUser: UserProfile = {
+          id: `u_${Date.now()}`,
+          name: name,
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff`,
+          createdAt: Date.now(),
+          lastIp: mockIp
+      };
+      setUsers(prev => [...prev, newUser]);
+      setCurrentUser(newUser);
+  };
+
+  const handleLogin = (user: UserProfile) => {
+      // Check Ban (Check user's last recorded IP)
+      const globalSettings = loadState<Partial<AppSettings>>('app_global_settings', {});
+      const banned = globalSettings.bannedIps || [];
+      
+      if (user.lastIp && banned.includes(user.lastIp)) {
+          alert(`登录失败：账号关联的 IP (${user.lastIp}) 已被封禁。`);
+          return;
+      }
+      
+      setCurrentUser(user);
+  };
+
+  const handleDeleteUser = (id: string) => {
+      setUsers(prev => prev.filter(u => u.id !== id));
+      localStorage.removeItem(`app_chats_${id}`);
+      localStorage.removeItem(`app_favorites_${id}`);
+      localStorage.removeItem(`app_changelogs_${id}`);
+      localStorage.removeItem(`app_settings_${id}`);
+      
+      if (currentUser?.id === id) {
+          setCurrentUser(null);
+      }
+  };
+
+  const handleUpdateSettings = (newSettings: AppSettings) => {
+    setSettings(newSettings);
+    
+    // Sync back to current user profile if name/avatar changed
+    if (currentUser) {
+        const updatedUser = { ...currentUser, name: newSettings.userName, avatar: newSettings.userAvatar };
+        if (updatedUser.name !== currentUser.name || updatedUser.avatar !== currentUser.avatar) {
+             setCurrentUser(updatedUser);
+             setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+        }
+    }
+
+    // If Admin (Authenticated), save critical configs AND Banned IPs to Global Storage
+    if (isAuthenticated) {
+        const globalConfigToSave: Partial<AppSettings> = {
+            providerConfigs: newSettings.providerConfigs,
+            activeProvider: newSettings.activeProvider,
+            geminiModel: newSettings.geminiModel,
+            enableThinking: newSettings.enableThinking,
+            bannedIps: newSettings.bannedIps
+        };
+        localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
+    }
+  };
+
+  // --- Admin User Management Handlers ---
+  
+  const handleAdminUpdateUser = (userId: string, updates: Partial<UserProfile>) => {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
+      // If updating current user, sync state
+      if (currentUser?.id === userId) {
+          setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+      }
+  };
+
+  const handleAdminToggleBanIp = (ip: string) => {
+      if (!ip) return;
+      const currentBanned = settings.bannedIps || [];
+      let newBanned: string[];
+      
+      if (currentBanned.includes(ip)) {
+          newBanned = currentBanned.filter(b => b !== ip);
+      } else {
+          newBanned = [...currentBanned, ip];
+      }
+      
+      const newSettings = { ...settings, bannedIps: newBanned };
+      handleUpdateSettings(newSettings);
+  };
+
+  const handleValidateAdmin = (u: string, p: string) => {
+      return u === adminCredentials.username && p === adminCredentials.password;
+  };
+
+  const handleAdminLoginSuccess = () => {
+       const adminUser: UserProfile = {
+          id: 'admin_root',
+          name: 'System Admin',
+          avatar: 'https://ui-avatars.com/api/?name=Sys&background=333&color=fff',
+          createdAt: Date.now(),
+          lastIp: '127.0.0.1'
+      };
+      setIsAuthenticated(true);
+      setCurrentUser(adminUser);
+  };
 
   // Filter lists based on search
   const filteredChats = chats.filter(chat => 
@@ -161,7 +299,6 @@ const App: React.FC = () => {
   };
 
   const handleSelectContact = (persona: Persona) => {
-    // Check if a private chat already exists
     const existingChat = chats.find(c => 
         c.type === 'private' && 
         c.members.length === 1 && 
@@ -258,11 +395,56 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setIsAuthenticated(false);
     setIsSettingsOpen(false);
+    // Return to auth modal if current user was admin
+    if (currentUser?.id === 'admin_root') {
+        setCurrentUser(null);
+    }
   };
+
+  // Derived Active Content
+  let activeContent = null;
+  let activeLog = null;
+
+  if (activeSidebarTab === 'favorites') {
+      if (selectedFavoriteId) {
+          const fav = favorites.find(f => f.id === selectedFavoriteId);
+          if (fav) {
+             activeContent = {
+                 id: fav.id,
+                 name: fav.title,
+                 avatar: 'https://ui-avatars.com/api/?name=F&background=orange&color=fff',
+                 members: [],
+                 isReadOnly: true,
+                 type: 'group',
+                 messages: fav.messages 
+             } as unknown as ChatGroup;
+          }
+      }
+  } else if (activeSidebarTab === 'changelog') {
+      activeLog = changelogs.find(l => l.id === selectedLogId);
+  } else {
+      activeContent = chats.find(c => c.id === selectedChatId);
+  }
+
+
+  // --- Render ---
+
+  if (!currentUser) {
+      return (
+          <AuthModal 
+            users={users}
+            onLogin={handleLogin}
+            onRegister={handleRegister}
+            onDeleteUser={handleDeleteUser}
+            onValidateAdmin={handleValidateAdmin}
+            onAdminLoginSuccess={handleAdminLoginSuccess}
+          />
+      );
+  }
 
   return (
     <div className="flex h-full w-full bg-white select-none relative">
-       {/* Sidebar - Hidden on mobile if chat is open */}
+       {/* Sidebar */}
        <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} flex-shrink-0 z-20 h-full`}>
            <Sidebar 
               userAvatar={settings.userAvatar}
@@ -273,7 +455,7 @@ const App: React.FC = () => {
            />
        </div>
        
-       {/* List Pane - Hidden on mobile if chat is open */}
+       {/* List Pane */}
        <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} flex-1 md:flex-none h-full overflow-hidden`}>
            {activeSidebarTab === 'chats' && (
                <ChatList 
@@ -319,7 +501,7 @@ const App: React.FC = () => {
            )}
        </div>
 
-       {/* Chat Window / Content - Full screen on mobile if chat is open */}
+       {/* Chat Window / Content */}
        <div className={`
           ${isMobileChatOpen ? 'flex fixed inset-0 z-30 bg-white' : 'hidden'} 
           md:flex md:static md:flex-1 h-full w-full
@@ -327,7 +509,6 @@ const App: React.FC = () => {
          {activeSidebarTab === 'changelog' ? (
              activeLog ? (
                  <>
-                   {/* Mobile Back Button Wrapper for ChangelogView */}
                     <div className="flex-1 h-full relative flex flex-col">
                          <div className="md:hidden absolute top-3 left-4 z-50">
                              <button 
@@ -379,7 +560,7 @@ const App: React.FC = () => {
           isOpen={isSettingsOpen}
           onClose={() => setIsSettingsOpen(false)}
           settings={settings}
-          onUpdateSettings={setSettings}
+          onUpdateSettings={handleUpdateSettings}
           personas={personas}
           onUpdatePersonas={setPersonas}
           isAuthenticated={isAuthenticated}
@@ -387,6 +568,12 @@ const App: React.FC = () => {
           adminCredentials={adminCredentials}
           onUpdateAdminCredentials={setAdminCredentials}
           onLogout={handleLogout}
+          onSwitchUser={() => setCurrentUser(null)}
+          // User Management Props
+          allUsers={users}
+          onAdminUpdateUser={handleAdminUpdateUser}
+          onAdminDeleteUser={handleDeleteUser}
+          onAdminToggleBanIp={handleAdminToggleBanIp}
        />
 
        <AboutModal 

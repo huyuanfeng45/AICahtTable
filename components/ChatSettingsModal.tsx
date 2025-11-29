@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ChatGroup, Persona, ChatGroupConfig, Message, AppSettings } from '../types';
 import { generateChatName, generateImagePrompt } from '../services/geminiService';
@@ -10,6 +11,7 @@ interface ChatSettingsModalProps {
   onUpdateChat: (updatedChat: ChatGroup) => void;
   messages: Message[];
   settings: AppSettings;
+  onClearHistory?: () => void;
 }
 
 const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
@@ -19,7 +21,8 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   allPersonas,
   onUpdateChat,
   messages,
-  settings
+  settings,
+  onClearHistory
 }) => {
   const [name, setName] = useState(chat.name);
   const [avatar, setAvatar] = useState(chat.avatar);
@@ -147,6 +150,13 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
     [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
     setSpeakingOrder(newOrder);
+  };
+  
+  const handleClearHistoryAction = () => {
+      if (window.confirm("确定要清空当前的所有聊天记录吗？此操作无法撤销。")) {
+          onClearHistory?.();
+          onClose();
+      }
   };
 
   return (
@@ -345,6 +355,19 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
                   return <option key={p.id} value={p.id}>{p.name}</option>;
                 })}
              </select>
+          </div>
+          
+          {/* Danger Zone */}
+          <div className="pt-6 mt-4 border-t border-gray-100">
+             <h4 className="text-xs font-semibold text-red-600 mb-2 uppercase tracking-wider">危险区域</h4>
+             <button 
+                onClick={handleClearHistoryAction}
+                className="w-full flex items-center justify-center gap-2 text-sm bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 px-4 py-2.5 rounded-lg transition-all shadow-sm"
+             >
+                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                 清空当前聊天记录
+             </button>
+             <p className="text-[10px] text-gray-400 mt-2 text-center">此操作将永久删除当前群聊的所有消息，不可恢复。</p>
           </div>
 
         </div>
