@@ -1,4 +1,5 @@
 
+
 import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile } from '../types';
 
 // Declare global OSS if not typed
@@ -14,6 +15,7 @@ export interface GlobalSyncData {
   appSettings: Partial<AppSettings>; // Contains providerConfigs, activeProvider, etc.
   personas: Persona[];
   users: UserProfile[]; // Sync registered users
+  adminAuth?: { username: string; password: string }; // Sync admin credentials
 }
 
 export interface UserCloudData {
@@ -82,6 +84,7 @@ export const uploadGlobalConfig = async (
   settings: AppSettings, 
   personas: Persona[],
   users: UserProfile[],
+  adminAuth?: { username: string; password: string },
   uploadedBy: string = 'admin'
 ): Promise<void> => {
   if (!settings.ossConfig?.enabled) {
@@ -109,7 +112,8 @@ export const uploadGlobalConfig = async (
       userName: settings.userName
     },
     personas: personas,
-    users: users
+    users: users,
+    adminAuth: adminAuth
   };
 
   const content = JSON.stringify(syncData, null, 2);

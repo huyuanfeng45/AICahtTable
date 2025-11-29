@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI } from "@google/genai";
 import { Persona, Message, AppSettings, ProviderConfig } from "../types";
 
@@ -303,16 +301,37 @@ export const generateRandomPersonaDetails = async (
   const config = settings.providerConfigs[providerId];
   const modelId = config.selectedModel;
 
+  // 1. Randomize the Archetype to ensure diversity
+  const archetypes = [
+      "赛博朋克黑客 (Cyberpunk Hacker) - 冷酷，技术流，喜欢加密俚语",
+      "古代智者/穿越者 (Ancient Sage) - 说话文言文，对现代科技感到惊讶或不屑",
+      "暴躁老哥/毒舌评论家 (Tsundere Critic) - 尖锐，挑剔，但偶尔说实话",
+      "呆萌治愈系 (Cute/Healer) - 充满表情包，非常乐观，喜欢鼓励人",
+      "硬核科幻科学家 (Hard Sci-Fi Scientist) - 凡事都要讲逻辑和物理定律，轻微疯狂",
+      "中二病幻想家 (Chunibyo) - 认为自己有超能力，世界被黑暗组织控制",
+      "八卦记者/吃瓜群众 (Gossip/Observer) - 喜欢打听消息，唯恐天下不乱",
+      "极简主义AI (Minimalist AI) - 莫得感情，回答极度简练，像个机器人",
+      "健身/热血教练 (Passionate Coach) - 充满能量，动不动就让人去运动",
+      "神秘学/占卜师 (Occult/Diviner) - 说话神神叨叨，喜欢预言",
+      "反派/混乱邪恶 (Villain/Chaotic) - 喜欢提出危险或混乱的建议",
+      "社畜/打工人 (Corporate Slave) - 疲惫，充满怨气，总是想摸鱼"
+  ];
+  const randomArchetype = archetypes[Math.floor(Math.random() * archetypes.length)];
+
   const prompt = `
     Design a unique, interesting, and distinct AI character persona for a chat room.
-    The character should have a specific personality, expertise, or quirk.
     
-    Return the result strictly as a valid JSON object with the following keys:
+    **Archetype/Theme:** ${randomArchetype}
+    
+    Requirements:
+    1. **Strictly follow the chosen Archetype.** Do NOT generate a generic "Helpful Assistant".
+    2. Give the character a unique name, a specific role, and a strong personality quirk.
+    3. Return the result strictly as a valid JSON object with the following keys:
     {
-      "name": "Name of the character (in Chinese, max 5 chars)",
-      "role": "Short role description (in Chinese, e.g. 'Science Fiction Writer', 'Cat Lover', max 8 chars)",
-      "systemInstruction": "Detailed system instruction for the AI to roleplay this character (in Chinese, about 50-100 words). Describe tone, style, and behavior.",
-      "avatarPrompt": "A short English visual description for the character's avatar (e.g. 'cyberpunk cat with neon glasses', 'old wise wizard', max 10 words)"
+      "name": "Name of the character (in Chinese, max 6 chars, creative)",
+      "role": "Short role description (in Chinese, max 8 chars, e.g. 'Time Traveler')",
+      "systemInstruction": "Detailed system instruction for the AI (in Chinese, about 50-100 words). Explicitly define their tone, catchphrases, and worldview based on the archetype '${randomArchetype}'.",
+      "avatarPrompt": "A high quality, vivid English visual description for the avatar matching the '${randomArchetype}' theme (max 15 words)."
     }
     Do not include markdown formatting like \`\`\`json. Just the raw JSON string.
   `;

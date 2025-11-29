@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
@@ -144,14 +142,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     // Only update personas/admin-creds if Admin
     if (isAuthenticated) {
         onUpdatePersonas(localPersonas);
-        onUpdateAdminCredentials({ username: localAdminUsername, password: localAdminPassword });
+        const newAdminCreds = { username: localAdminUsername, password: localAdminPassword };
+        onUpdateAdminCredentials(newAdminCreds);
 
         // Auto Upload to OSS if enabled
         if (localOssConfig.enabled) {
             setIsSaving(true);
             try {
                 // Upload current state to cloud, including all users for Admin
-                await uploadGlobalConfig(newSettings, localPersonas, allUsers || [], localUserName);
+                await uploadGlobalConfig(newSettings, localPersonas, allUsers || [], newAdminCreds, localUserName);
                 console.log('Auto-uploaded config to OSS');
             } catch (e) {
                 console.error('Auto upload failed', e);
@@ -212,8 +211,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               userAvatar: localAvatar,
               userName: localUserName
           };
+          const tempAdminCreds = { username: localAdminUsername, password: localAdminPassword };
           // Include users in manual sync
-          await uploadGlobalConfig(tempSettings, localPersonas, allUsers || [], settings.userName);
+          await uploadGlobalConfig(tempSettings, localPersonas, allUsers || [], tempAdminCreds, settings.userName);
           setSyncStatus(`上传成功! (${new Date().toLocaleTimeString()})`);
       } catch (e) {
           console.error(e);
@@ -247,6 +247,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               // Apply downloaded users if exists
               if (data.users && onUpdateAllUsers) {
                   onUpdateAllUsers(data.users);
+              }
+
+              // Update admin creds if present in cloud
+              if (data.adminAuth) {
+                  setLocalAdminUsername(data.adminAuth.username);
+                  setLocalAdminPassword(data.adminAuth.password);
+                  onUpdateAdminCredentials(data.adminAuth);
               }
               
               setSyncStatus(`同步成功! 更新于: ${new Date(data.timestamp).toLocaleString()}`);
@@ -1287,93 +1294,65 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </nav>
 
             <div className="px-6 mt-auto">
-                <div className="text-xs text-gray-400">
-                    Version 1.5.0
-                </div>
+                <div className="text-xs text-gray-400">Version 1.5.0</div>
+                <div className="text-[10px] text-gray-300 mt-1">AI Round Table</div>
             </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0">
-            {/* Header / Close */}
-            <div className="flex justify-end p-4">
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-            </div>
+        {/* Right Content */}
+        <div className="flex-1 flex flex-col bg-white min-w-0 relative">
+             {/* Scrollable Area */}
+             <div className="flex-1 overflow-hidden p-6 relative">
+                 {activeTab === 'profile' && renderProfileTab()}
+                 {activeTab === 'models' && renderModelsTab()}
+                 {activeTab === 'characters' && renderCharactersTab()}
+                 {activeTab === 'users' && renderUsersTab()}
+                 {activeTab === 'cloud' && renderCloudTab()}
+                 {activeTab === 'notifications' && renderNotificationsTab()}
+             </div>
 
-            {/* Content Area */}
-            <div className="flex-1 px-8 pb-8 overflow-hidden flex flex-col">
-                <>
-                    {activeTab === 'profile' && renderProfileTab()}
-                    {activeTab === 'cloud' && isAuthenticated && renderCloudTab()}
-                    {activeTab === 'models' && isAuthenticated && renderModelsTab()}
-                    {activeTab === 'characters' && isAuthenticated && renderCharactersTab()}
-                    {activeTab === 'users' && isAuthenticated && renderUsersTab()}
-                    {activeTab === 'notifications' && isAuthenticated && renderNotificationsTab()}
-                </>
-            </div>
-
-            {/* Footer Actions */}
-            <div className="px-8 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
-                <button 
+             {/* Footer Actions */}
+             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
+                 <button 
                     onClick={onClose}
-                    disabled={isSaving}
-                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50"
-                >
+                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                 >
                     取消
-                </button>
-                <button 
+                 </button>
+                 <button 
                     onClick={handleSave}
                     disabled={isSaving}
-                    className="px-4 py-2 text-sm bg-[#07c160] text-white rounded hover:bg-[#06ad56] shadow-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-wait"
-                >
-                    {isSaving && (
-                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    )}
-                    {isSaving ? '保存并上传...' : '保存设置'}
-                </button>
-            </div>
-            
-            {/* Export Code Modal Overlay */}
-            {exportedCode && (
-                <div className="absolute inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-8 animate-in fade-in duration-200">
+                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded hover:bg-black transition-colors disabled:opacity-70 flex items-center gap-2"
+                 >
+                    {isSaving ? '保存中...' : '保存更改'}
+                 </button>
+             </div>
+             
+             {/* Export Code Overlay */}
+             {exportedCode && (
+                <div className="absolute inset-0 bg-black bg-opacity-60 z-[60] flex items-center justify-center p-8 backdrop-blur-sm">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-full">
-                         <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-                             <h3 className="font-bold text-gray-800">默认配置代码 (Deployment Defaults)</h3>
-                             <button onClick={() => setExportedCode(null)} className="text-gray-500 hover:text-gray-700">
-                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                             </button>
-                         </div>
-                         <div className="p-4 flex-1 overflow-hidden relative">
-                             <p className="text-xs text-gray-500 mb-2">请复制下方代码，覆盖项目文件 <code>constants.ts</code> 中的 <code>DEFAULT_APP_SETTINGS</code> 变量。重新构建部署后，此配置将成为所有新用户的默认设置。</p>
-                             <textarea 
-                                readOnly
-                                value={exportedCode}
-                                className="w-full h-[300px] font-mono text-xs bg-gray-50 border border-gray-200 rounded p-3 focus:outline-none resize-none"
-                                onClick={(e) => e.currentTarget.select()}
-                             />
-                         </div>
-                         <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
-                             <button 
-                                onClick={() => setExportedCode(null)}
-                                className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-200 rounded"
-                             >
-                                 关闭
-                             </button>
-                             <button 
+                        <div className="flex justify-between items-center p-4 border-b border-gray-100">
+                            <h3 className="font-medium text-gray-900">系统默认配置导出</h3>
+                            <button onClick={() => setExportedCode(null)} className="text-gray-400 hover:text-gray-600">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-auto bg-gray-50 flex-1 relative group">
+                            <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap break-all">{exportedCode}</pre>
+                            <button 
                                 onClick={() => {
                                     navigator.clipboard.writeText(exportedCode);
-                                    alert("已复制到剪贴板！");
+                                    alert("代码已复制到剪贴板");
                                 }}
-                                className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 rounded"
-                             >
-                                 复制代码
-                             </button>
-                         </div>
+                                className="absolute top-2 right-2 bg-white border border-gray-200 shadow-sm px-3 py-1 text-xs rounded text-gray-600 hover:text-green-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                复制
+                            </button>
+                        </div>
+                        <div className="p-4 border-t border-gray-100 text-right">
+                            <button onClick={() => setExportedCode(null)} className="bg-gray-900 text-white px-4 py-2 rounded text-sm">关闭</button>
+                        </div>
                     </div>
                 </div>
             )}

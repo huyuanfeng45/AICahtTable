@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -107,7 +108,9 @@ const App: React.FC = () => {
 
   // Admin Auth (for global settings)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminCredentials, setAdminCredentials] = useState({ username: 'admin', password: '123456' });
+  const [adminCredentials, setAdminCredentials] = useState(() => 
+      loadState('app_admin_creds', { username: 'admin', password: '123456' })
+  );
 
   // Manage Personas State (Global for now, but editable)
   const [personas, setPersonas] = useState<Persona[]>(() => loadState('app_personas', AI_PERSONAS));
@@ -117,6 +120,11 @@ const App: React.FC = () => {
 
   // Ref for debounced save
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist Admin Credentials on change
+  useEffect(() => {
+      localStorage.setItem('app_admin_creds', JSON.stringify(adminCredentials));
+  }, [adminCredentials]);
 
   // --- Auto Sync Logic (Global Config) ---
   useEffect(() => {
@@ -155,6 +163,11 @@ const App: React.FC = () => {
                       if (data.users && Array.isArray(data.users)) {
                           setUsers(data.users);
                           localStorage.setItem('app_users', JSON.stringify(data.users));
+                      }
+
+                      // Update Admin Credentials if present in cloud
+                      if (data.adminAuth) {
+                          setAdminCredentials(data.adminAuth);
                       }
                       
                       // Persist merged state to local storage
@@ -354,6 +367,8 @@ const App: React.FC = () => {
               let usersToSave = [newUser];
               let settingsToSave = settings;
               let personasToSave = personas;
+              // Preserve admin credentials if we are not admin
+              let adminAuthToSave = adminCredentials; 
 
               if (globalData) {
                   const existingUsers = globalData.users || [];
@@ -368,12 +383,17 @@ const App: React.FC = () => {
                   // NOTE: This includes notificationConfig and global profile if set in cloud
                   settingsToSave = { ...settings, ...globalData.appSettings };
                   personasToSave = globalData.personas || personas;
+                  
+                  // Preserve cloud admin auth
+                  if (globalData.adminAuth) {
+                      adminAuthToSave = globalData.adminAuth;
+                  }
               } else {
                   // Fallback to local + new if no cloud config found
                   usersToSave = [...users, newUser];
               }
 
-              await uploadGlobalConfig(settingsToSave, personasToSave, usersToSave, newUser.name);
+              await uploadGlobalConfig(settingsToSave, personasToSave, usersToSave, adminAuthToSave, newUser.name);
               console.log('User registered to cloud successfully.');
           } catch (e) {
               console.error('Failed to register user to cloud registry', e);
