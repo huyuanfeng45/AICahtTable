@@ -101,9 +101,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [isOpen, settings, personas, adminCredentials]);
 
   // Reset tab if not authenticated and on restricted tab
-  // Note: 'cloud' is available to everyone to INPUT keys, but Upload is Admin only.
   useEffect(() => {
-      if (!isAuthenticated && (activeTab === 'models' || activeTab === 'characters' || activeTab === 'users')) {
+      if (!isAuthenticated && (activeTab === 'models' || activeTab === 'characters' || activeTab === 'users' || activeTab === 'cloud')) {
           setActiveTab('profile');
       }
   }, [isAuthenticated, activeTab]);
@@ -1084,21 +1083,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     个人资料
                 </button>
                 
-                {/* Available to everyone to set up Sync */}
-                <button 
-                    onClick={() => setActiveTab('cloud')}
-                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'cloud' 
-                        ? 'bg-white text-green-600 shadow-sm' 
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                >
-                    <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                    云端同步
-                </button>
-                
                 {isAuthenticated && (
                     <>
+                    <button 
+                        onClick={() => setActiveTab('cloud')}
+                        className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                            activeTab === 'cloud' 
+                            ? 'bg-white text-green-600 shadow-sm' 
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        }`}
+                    >
+                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        云端同步
+                    </button>
+                    
                     <button 
                     onClick={() => setActiveTab('models')}
                     className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1158,7 +1156,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex-1 px-8 pb-8 overflow-hidden flex flex-col">
                 <>
                     {activeTab === 'profile' && renderProfileTab()}
-                    {activeTab === 'cloud' && renderCloudTab()}
+                    {activeTab === 'cloud' && isAuthenticated && renderCloudTab()}
                     {activeTab === 'models' && isAuthenticated && renderModelsTab()}
                     {activeTab === 'characters' && isAuthenticated && renderCharactersTab()}
                     {activeTab === 'users' && isAuthenticated && renderUsersTab()}
