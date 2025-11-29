@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -22,7 +21,7 @@ const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 - 角色扮演与群聊模拟
 - 收藏夹与导出功能
 - 实时思维链展示
-- 阿里云 OSS 配置同步`;
+- 阿里云 OSS 配置同步 (支持 Vercel 环境变量)`;
 
 // Persistence Helper
 function loadState<T>(key: string, defaultValue: T): T {
@@ -53,14 +52,43 @@ const App: React.FC = () => {
   
   // App Settings - Loaded per user (preference) or global default
   const [settings, setSettings] = useState<AppSettings>(() => {
-      // Load global banned IPs immediately to prevent flash of unbanned state
       const global = loadState<Partial<AppSettings>>('app_global_settings', {});
-      return {
+      
+      // Determine if we have Environment Variables for OSS
+      // These are populated in DEFAULT_APP_SETTINGS via constants.ts
+      const envOssConfig = DEFAULT_APP_SETTINGS.ossConfig;
+      const hasEnvOss = envOssConfig && envOssConfig.accessKeyId && envOssConfig.bucket;
+      
+      const mergedSettings: AppSettings = {
           ...DEFAULT_APP_SETTINGS,
+          ...global,
           bannedIps: global.bannedIps || [],
-          // Ensure OSS config is loaded from global if not in default
-          ossConfig: global.ossConfig || DEFAULT_APP_SETTINGS.ossConfig
+          // Preserve User Profile if coming from global cache (legacy) or default
+          userName: global.userName || DEFAULT_APP_SETTINGS.userName,
       };
+      
+      // CRITICAL: Force OSS Config from Environment if present, overriding local storage
+      // This ensures that if the admin deploys with new keys, everyone gets them.
+      if (hasEnvOss) {
+          mergedSettings.ossConfig = {
+              ...mergedSettings.ossConfig,
+              region: envOssConfig.region,
+              accessKeyId: envOssConfig.accessKeyId,
+              accessKeySecret: envOssConfig.accessKeySecret,
+              bucket: envOssConfig.bucket,
+              path: envOssConfig.path,
+              // If env vars exist, default to Enabled/AutoSync unless user explicitly saved otherwise
+              // However, to satisfy "others can directly use", we lean towards enforcing the Env defaults
+              // if the local storage doesn't explicitly have them.
+              enabled: global.ossConfig?.enabled ?? envOssConfig.enabled,
+              autoSync: global.ossConfig?.autoSync ?? envOssConfig.autoSync,
+          };
+      } else {
+          // If no env vars, respect local storage or default empty
+          mergedSettings.ossConfig = global.ossConfig || DEFAULT_APP_SETTINGS.ossConfig;
+      }
+      
+      return mergedSettings;
   });
   
   // Selection State
@@ -106,14 +134,16 @@ const App: React.FC = () => {
                           setPersonas(data.personas);
                       }
                       
-                      // Persist immediately
+                      // Persist merged state to local storage
+                      // Note: We do NOT persist the OSS secrets if they are from env vars (to keep them clean),
+                      // but typically localStorage stringify will include them. That's fine for client-side app persistence.
                       localStorage.setItem('app_global_settings', JSON.stringify({
                           providerConfigs: newSettings.providerConfigs,
                           activeProvider: newSettings.activeProvider,
                           geminiModel: newSettings.geminiModel,
                           enableThinking: newSettings.enableThinking,
                           bannedIps: newSettings.bannedIps,
-                          ossConfig: settings.ossConfig // keep original oss config
+                          ossConfig: settings.ossConfig
                       }));
                   }
               } catch (e) {
@@ -124,7 +154,7 @@ const App: React.FC = () => {
       
       // Run once on mount if enabled
       performAutoSync();
-  }, []); // Only run once on mount (or when app reloads)
+  }, []); // Only run once on mount
 
   // --- Effects for User Switching & Data Loading ---
 
@@ -140,6 +170,10 @@ const App: React.FC = () => {
           const savedUserSettings = loadState<AppSettings | null>(`app_settings_${currentUser.id}`, null);
           const savedGlobalSettings = loadState<Partial<AppSettings>>('app_global_settings', {});
           
+          // Determine Env OSS Config again for user-switch scenario
+          const envOssConfig = DEFAULT_APP_SETTINGS.ossConfig;
+          const hasEnvOss = envOssConfig && envOssConfig.accessKeyId && envOssConfig.bucket;
+
           // Merge logic
           const mergedSettings: AppSettings = {
               ...DEFAULT_APP_SETTINGS,
@@ -150,7 +184,13 @@ const App: React.FC = () => {
               geminiModel: savedGlobalSettings.geminiModel || (savedUserSettings?.geminiModel || DEFAULT_APP_SETTINGS.geminiModel),
               enableThinking: savedGlobalSettings.enableThinking ?? (savedUserSettings?.enableThinking ?? DEFAULT_APP_SETTINGS.enableThinking),
               bannedIps: savedGlobalSettings.bannedIps || [],
-              ossConfig: savedGlobalSettings.ossConfig || (savedUserSettings?.ossConfig || DEFAULT_APP_SETTINGS.ossConfig),
+              
+              // OSS Config Logic: Priority = Env > SavedGlobal > SavedUser > Default
+              ossConfig: hasEnvOss ? {
+                  ...envOssConfig,
+                  enabled: savedGlobalSettings.ossConfig?.enabled ?? envOssConfig.enabled,
+                  autoSync: savedGlobalSettings.ossConfig?.autoSync ?? envOssConfig.autoSync,
+              } : (savedGlobalSettings.ossConfig || (savedUserSettings?.ossConfig || DEFAULT_APP_SETTINGS.ossConfig)),
               
               // Ensure user profile is preserved
               userName: savedUserSettings?.userName || currentUser.name,

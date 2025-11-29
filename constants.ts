@@ -1,3 +1,4 @@
+
 import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry, AppSettings } from './types';
 
 export const USER_ID = 'user-me';
@@ -188,6 +189,19 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<ProviderId, ProviderConfig> = {
   openai: { apiKey: '', baseUrl: 'https://api.openai.com/v1', selectedModel: 'gpt-4o' }
 };
 
+// Check for Vercel/System Env Vars for OSS
+// We check for standard OSS_ prefixes.
+const ENV_OSS_CONFIG = {
+  region: process.env.OSS_REGION || '',
+  accessKeyId: process.env.OSS_ACCESS_KEY_ID || '',
+  accessKeySecret: process.env.OSS_ACCESS_KEY_SECRET || '',
+  bucket: process.env.OSS_BUCKET || '',
+  path: process.env.OSS_PATH || 'ai-roundtable/config.json',
+};
+
+// If valid credentials exist in environment, we enable sync by default
+const hasEnvOss = !!(ENV_OSS_CONFIG.region && ENV_OSS_CONFIG.accessKeyId && ENV_OSS_CONFIG.accessKeySecret && ENV_OSS_CONFIG.bucket);
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   userAvatar: 'https://picsum.photos/seed/me/100/100',
   userName: 'User',
@@ -197,12 +211,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   providerConfigs: DEFAULT_PROVIDER_CONFIGS,
   bannedIps: [],
   ossConfig: {
-    region: 'oss-cn-hangzhou',
-    accessKeyId: '',
-    accessKeySecret: '',
-    bucket: '',
-    path: 'ai-roundtable/config.json',
-    enabled: false,
-    autoSync: false
+    ...ENV_OSS_CONFIG,
+    enabled: hasEnvOss,
+    autoSync: hasEnvOss
   }
 };

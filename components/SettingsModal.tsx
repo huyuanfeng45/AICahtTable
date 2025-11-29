@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
@@ -454,17 +453,35 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       </div>
   );
   
-  const renderCloudTab = () => (
+  const renderCloudTab = () => {
+    // Check if using Env Vars
+    const hasEnvRegion = !!process.env.OSS_REGION;
+    const hasEnvAccessKey = !!process.env.OSS_ACCESS_KEY_ID;
+    const isEnvManaged = hasEnvRegion && hasEnvAccessKey;
+
+    return (
       <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
           <div className="flex items-center justify-between mb-4">
             <div>
                 <h3 className="text-lg font-medium text-gray-900">云端同步 (Cloud Sync)</h3>
                 <p className="text-xs text-gray-500">接入阿里云 OSS，实现配置的云端存储与多端同步。</p>
             </div>
+            {isEnvManaged && (
+                <div className="bg-purple-100 text-purple-700 px-3 py-1 rounded text-xs font-medium border border-purple-200 flex items-center gap-1">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    Managed by Environment
+                </div>
+            )}
           </div>
           
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6">
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 relative">
+                  {isEnvManaged && (
+                    <div className="absolute top-0 right-0 p-2 opacity-50">
+                       <svg className="w-16 h-16 text-blue-200" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    </div>
+                  )}
+
                   <h4 className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-2">
                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                        OSS 配置
@@ -477,7 +494,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               placeholder="oss-cn-hangzhou"
                               value={localOssConfig.region}
                               onChange={(e) => setLocalOssConfig({...localOssConfig, region: e.target.value})}
-                              className="w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              className={`w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${isEnvManaged ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                              disabled={isEnvManaged}
                           />
                       </div>
                       <div>
@@ -487,16 +505,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               placeholder="my-ai-config"
                               value={localOssConfig.bucket}
                               onChange={(e) => setLocalOssConfig({...localOssConfig, bucket: e.target.value})}
-                              className="w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              className={`w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${isEnvManaged ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                              disabled={isEnvManaged}
                           />
                       </div>
                       <div className="col-span-2">
                            <label className="block text-xs font-medium text-gray-600 mb-1">AccessKey ID</label>
                           <input 
-                              type="password" 
-                              value={localOssConfig.accessKeyId}
+                              type="text" // changed from password to text for env display check
+                              value={isEnvManaged ? `${localOssConfig.accessKeyId.substring(0, 4)}... (from env)` : localOssConfig.accessKeyId}
                               onChange={(e) => setLocalOssConfig({...localOssConfig, accessKeyId: e.target.value})}
-                              className="w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              className={`w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${isEnvManaged ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                              disabled={isEnvManaged}
                           />
                       </div>
                       <div className="col-span-2">
@@ -505,7 +525,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               type="password" 
                               value={localOssConfig.accessKeySecret}
                               onChange={(e) => setLocalOssConfig({...localOssConfig, accessKeySecret: e.target.value})}
-                              className="w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              className={`w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${isEnvManaged ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                              disabled={isEnvManaged}
+                              placeholder={isEnvManaged ? "Hidden (Loaded from Environment)" : ""}
                           />
                       </div>
                       <div className="col-span-2">
@@ -515,12 +537,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               placeholder="ai-roundtable/config.json"
                               value={localOssConfig.path}
                               onChange={(e) => setLocalOssConfig({...localOssConfig, path: e.target.value})}
-                              className="w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                              className={`w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${isEnvManaged ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                              disabled={isEnvManaged}
                           />
                       </div>
                   </div>
                   
-                  <div className="mt-4 flex items-center gap-4">
+                  <div className="mt-4 flex items-center gap-4 border-t border-blue-200 pt-3">
                       <div className="flex items-center">
                           <input 
                             id="enableOss" 
@@ -529,7 +552,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             onChange={(e) => setLocalOssConfig({...localOssConfig, enabled: e.target.checked})}
                             className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                           />
-                          <label htmlFor="enableOss" className="ml-2 text-sm text-gray-700">启用云端同步</label>
+                          <label htmlFor="enableOss" className="ml-2 text-sm text-gray-700">启用云端同步 (Enable)</label>
                       </div>
                       <div className="flex items-center">
                           <input 
@@ -587,13 +610,16 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       <ul className="list-disc list-inside space-y-1 mt-1 ml-1">
                           <li>上传操作将覆盖云端的 <code>{localOssConfig.path || 'config.json'}</code> 文件。</li>
                           <li>拉取操作将覆盖本地的“模型接入”和“角色管理”配置。</li>
-                          <li>普通用户只需填写 OSS 密钥并点击“拉取配置”即可使用管理员部署的模型和角色。</li>
+                          {isEnvManaged && (
+                              <li className="text-purple-600 font-medium">OSS 连接信息正由环境变量管理，普通用户打开应用时将自动拉取。</li>
+                          )}
                       </ul>
                   </div>
               </div>
           </div>
       </div>
-  );
+    );
+  };
 
   const renderProfileTab = () => (
     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
