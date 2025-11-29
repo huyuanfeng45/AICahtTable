@@ -406,6 +406,28 @@ const App: React.FC = () => {
           setCurrentUser(null);
       }
   };
+  
+  const handleDeleteChat = (chatId: string) => {
+    // Confirm delete
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+
+    if (!window.confirm(`确定要删除 "${chat.name}" 吗？所有聊天记录将被清除，此操作不可恢复。`)) {
+        return;
+    }
+
+    // 1. Remove from state
+    setChats(prev => prev.filter(c => c.id !== chatId));
+
+    // 2. Remove messages from storage
+    localStorage.removeItem(`chat_msgs_${chatId}`);
+
+    // 3. Update selection if needed
+    if (selectedChatId === chatId) {
+        setSelectedChatId('');
+        setIsMobileChatOpen(false);
+    }
+  };
 
   const handleUpdateSettings = (newSettings: AppSettings) => {
     setSettings(newSettings);
@@ -679,6 +701,7 @@ const App: React.FC = () => {
                  chats={filteredChats}
                  selectedChatId={selectedChatId} 
                  onSelectChat={handleSelectChat} 
+                 onDeleteChat={handleDeleteChat}
                  searchQuery={searchQuery}
                  onSearchChange={setSearchQuery}
                  onAddChat={handleAddChat}
@@ -758,6 +781,7 @@ const App: React.FC = () => {
                 settings={settings}
                 allPersonas={personas}
                 onUpdateChat={handleUpdateChat}
+                onDeleteChat={handleDeleteChat}
                 onAddToFavorites={handleAddToFavorites}
                 onBack={() => setIsMobileChatOpen(false)}
              />

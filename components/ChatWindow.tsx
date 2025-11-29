@@ -12,11 +12,12 @@ interface ChatWindowProps {
   settings: AppSettings;
   allPersonas: Persona[];
   onUpdateChat: (updatedChat: ChatGroup) => void;
+  onDeleteChat?: (chatId: string) => void;
   onAddToFavorites?: (messages: Message[], sourceName: string) => void;
   onBack?: () => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, onUpdateChat, onAddToFavorites, onBack }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, onUpdateChat, onDeleteChat, onAddToFavorites, onBack }) => {
   const STORAGE_KEY = `chat_msgs_${chat.id}`;
 
   // Initialize state from LocalStorage or Defaults
@@ -741,6 +742,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         chat={chat}
         allPersonas={allPersonas}
         onUpdateChat={onUpdateChat}
+        onDeleteChat={onDeleteChat ? () => onDeleteChat(chat.id) : undefined}
         messages={messages} // Pass full history
         settings={settings} // Pass settings for API
         onClearHistory={handleClearHistory}

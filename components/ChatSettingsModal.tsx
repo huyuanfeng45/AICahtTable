@@ -9,6 +9,7 @@ interface ChatSettingsModalProps {
   chat: ChatGroup;
   allPersonas: Persona[];
   onUpdateChat: (updatedChat: ChatGroup) => void;
+  onDeleteChat?: () => void;
   messages: Message[];
   settings: AppSettings;
   onClearHistory?: () => void;
@@ -20,6 +21,7 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   chat,
   allPersonas,
   onUpdateChat,
+  onDeleteChat,
   messages,
   settings,
   onClearHistory
@@ -157,6 +159,12 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
           onClearHistory?.();
           onClose();
       }
+  };
+
+  const handleDeleteChatAction = () => {
+      onDeleteChat?.(); // Confirmation is handled in App.tsx or we can move it here. 
+      // In this specific implementation, App.tsx handles confirmation for consistency.
+      onClose();
   };
 
   return (
@@ -360,14 +368,26 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
           {/* Danger Zone */}
           <div className="pt-6 mt-4 border-t border-gray-100">
              <h4 className="text-xs font-semibold text-red-600 mb-2 uppercase tracking-wider">危险区域</h4>
-             <button 
-                onClick={handleClearHistoryAction}
-                className="w-full flex items-center justify-center gap-2 text-sm bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 px-4 py-2.5 rounded-lg transition-all shadow-sm"
-             >
-                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                 清空当前聊天记录
-             </button>
-             <p className="text-[10px] text-gray-400 mt-2 text-center">此操作将永久删除当前群聊的所有消息，不可恢复。</p>
+             <div className="space-y-3">
+                 <button 
+                    onClick={handleClearHistoryAction}
+                    className="w-full flex items-center justify-center gap-2 text-sm bg-white text-orange-600 border border-orange-200 hover:bg-orange-50 hover:border-orange-300 px-4 py-2.5 rounded-lg transition-all shadow-sm"
+                 >
+                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                     清空当前聊天记录
+                 </button>
+                 
+                 {onDeleteChat && (
+                     <button 
+                        onClick={handleDeleteChatAction}
+                        className="w-full flex items-center justify-center gap-2 text-sm bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300 px-4 py-2.5 rounded-lg transition-all shadow-sm"
+                     >
+                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                         删除整个群聊
+                     </button>
+                 )}
+             </div>
+             <p className="text-[10px] text-gray-400 mt-2 text-center">操作不可恢复，请谨慎操作。</p>
           </div>
 
         </div>

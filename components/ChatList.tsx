@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { ChatGroup } from '../types';
 
@@ -5,6 +6,7 @@ interface ChatListProps {
   chats: ChatGroup[];
   selectedChatId: string;
   onSelectChat: (id: string) => void;
+  onDeleteChat: (id: string, e?: React.MouseEvent) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onAddChat: () => void;
@@ -14,6 +16,7 @@ const ChatList: React.FC<ChatListProps> = ({
   chats, 
   selectedChatId, 
   onSelectChat,
+  onDeleteChat,
   searchQuery,
   onSearchChange,
   onAddChat
@@ -59,7 +62,7 @@ const ChatList: React.FC<ChatListProps> = ({
             <div 
                 key={chat.id} 
                 onClick={() => onSelectChat(chat.id)}
-                className={`flex items-center p-3 cursor-pointer select-none transition-colors ${
+                className={`group relative flex items-center p-3 cursor-pointer select-none transition-colors ${
                 selectedChatId === chat.id 
                     ? 'bg-[#c6c6c6] bg-opacity-40' 
                     : 'hover:bg-[#dcdcdc] hover:bg-opacity-50'
@@ -85,6 +88,17 @@ const ChatList: React.FC<ChatListProps> = ({
                 </div>
                 <p className="text-[11px] text-gray-500 truncate">{chat.lastMessage}</p>
                 </div>
+
+                <button 
+                   onClick={(e) => onDeleteChat(chat.id, e)}
+                   className="hidden group-hover:block p-1 text-gray-400 hover:text-red-500 transition-colors absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 rounded shadow-sm z-10"
+                   title="删除会话"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
             </div>
             ))
         )}
