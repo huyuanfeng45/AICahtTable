@@ -100,6 +100,7 @@ const App: React.FC = () => {
   const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog'>('chats');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncStatus, setSyncStatus] = useState<string>(''); // For AuthModal feedback
+  const [ossConnectStatus, setOssConnectStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
 
   // Admin Auth (for global settings)
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -112,9 +113,11 @@ const App: React.FC = () => {
   useEffect(() => {
       const performAutoSync = async () => {
           if (settings.ossConfig?.enabled && settings.ossConfig?.autoSync) {
-              setSyncStatus('正在连接云端获取最新配置...');
+              setSyncStatus('正在连接云端数据库...');
+              setOssConnectStatus('connecting');
               try {
                   const data = await downloadGlobalConfig(settings);
+                  setOssConnectStatus('connected');
                   if (data) {
                       console.log('Auto-sync successful', data);
                       setSyncStatus('配置同步成功');
@@ -154,6 +157,7 @@ const App: React.FC = () => {
               } catch (e) {
                   console.error('Auto-sync failed', e);
                   setSyncStatus('云端同步失败 (请检查网络或配置)');
+                  setOssConnectStatus('error');
                   setTimeout(() => setSyncStatus(''), 5000);
               }
           }
@@ -535,6 +539,7 @@ const App: React.FC = () => {
             onValidateAdmin={handleValidateAdmin}
             onAdminLoginSuccess={handleAdminLoginSuccess}
             syncStatus={syncStatus}
+            ossConnectStatus={ossConnectStatus}
           />
       );
   }
