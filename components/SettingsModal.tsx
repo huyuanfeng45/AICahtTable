@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
@@ -150,6 +152,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             setIsSaving(true);
             try {
                 // Upload current state to cloud, including all users for Admin
+                // CRITICAL FIX: Pass newAdminCreds instead of old adminCredentials state
                 await uploadGlobalConfig(newSettings, localPersonas, allUsers || [], newAdminCreds, localUserName);
                 console.log('Auto-uploaded config to OSS');
             } catch (e) {
@@ -211,6 +214,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               userAvatar: localAvatar,
               userName: localUserName
           };
+          // CRITICAL FIX: Use current local edits for admin auth
           const tempAdminCreds = { username: localAdminUsername, password: localAdminPassword };
           // Include users in manual sync
           await uploadGlobalConfig(tempSettings, localPersonas, allUsers || [], tempAdminCreds, settings.userName);

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -205,7 +206,7 @@ const App: React.FC = () => {
   useEffect(() => {
       if (currentUser) {
           // 1. Load from LocalStorage first (Instant interaction)
-          setChats(loadState(`app_chats_${currentUser.id}`, []));
+          setChats(loadState(`app_chats_${currentUser.id}`, [])); // Initialize with empty array, NOT mocks
           setFavorites(loadState(`app_favorites_${currentUser.id}`, []));
           setChangelogs(loadState(`app_changelogs_${currentUser.id}`, MOCK_CHANGELOGS));
           
@@ -346,6 +347,13 @@ const App: React.FC = () => {
   // --- Handlers ---
 
   const handleRegister = async (name: string) => {
+      // 1. Check Local Users First (Login if exists)
+      const existingLocalUser = users.find(u => u.name === name);
+      if (existingLocalUser) {
+          handleLogin(existingLocalUser);
+          return;
+      }
+
       const mockIp = generateMockIp();
       
       // Check Ban
@@ -377,7 +385,6 @@ const App: React.FC = () => {
                       setSyncStatus('账号已存在，自动登录');
                       setTimeout(() => setSyncStatus(''), 2000);
                       
-                      // 3. Trigger notification for login (optional)
                       return; // Exit here, do not create new user
                   }
               }

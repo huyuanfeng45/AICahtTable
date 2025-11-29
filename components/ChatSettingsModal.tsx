@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { ChatGroup, Persona, ChatGroupConfig, Message, AppSettings } from '../types';
 import { generateChatName, generateImagePrompt } from '../services/geminiService';

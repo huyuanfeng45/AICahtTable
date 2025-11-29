@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 
@@ -25,8 +26,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
   ossConnectStatus,
   isOssConfigured = true
 }) => {
-  // If we have users, default to login view, otherwise register
-  const [view, setView] = useState<'login' | 'register'>(users.length > 0 ? 'login' : 'register');
   const [newName, setNewName] = useState('');
   
   // Admin Login State
@@ -79,7 +78,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <h1 className="text-2xl font-bold text-gray-800">AI Round Table</h1>
             <p className="text-gray-500 text-sm mt-2">
-                {showAdminLogin ? '管理员后台登录' : (view === 'login' ? '选择账号进入聊天' : '创建一个新身份')}
+                {showAdminLogin ? '管理员后台登录' : '输入用户名进入聊天'}
             </p>
         </div>
 
@@ -127,42 +126,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
                         返回
                     </button>
                 </div>
-            ) : view === 'login' ? (
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        {users.map(user => (
-                            <div 
-                                key={user.id} 
-                                className="relative group border border-gray-200 rounded-xl p-4 flex flex-col items-center cursor-pointer hover:border-green-500 hover:bg-green-50 transition-all"
-                                onClick={() => onLogin(user)}
-                            >
-                                <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full bg-gray-200 object-cover mb-3" />
-                                <span className="font-medium text-gray-800 truncate w-full text-center text-sm">{user.name}</span>
-                                
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (window.confirm(`确定要删除用户 "${user.name}" 吗? 所有相关数据将丢失。`)) {
-                                            onDeleteUser(user.id);
-                                        }
-                                    }}
-                                    className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                </button>
-                            </div>
-                        ))}
-                        
-                        {/* Add User Button */}
-                        <div 
-                            onClick={() => setView('register')}
-                            className="border border-dashed border-gray-300 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-green-500 hover:bg-gray-50 text-gray-400 hover:text-green-600 transition-all min-h-[140px]"
-                        >
-                             <svg className="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                             <span className="text-sm font-medium">添加账号</span>
-                        </div>
-                    </div>
-                </div>
             ) : (
                 <div className="space-y-6 relative">
                     <div>
@@ -176,7 +139,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
                             placeholder="请输入用户名"
                             autoFocus
                         />
-                         <p className="text-xs text-gray-400 mt-2">* 无需密码，注册即登录</p>
+                         <p className="text-xs text-gray-400 mt-2">* 如果账号已存在将自动登录，否则创建新账号。</p>
                     </div>
 
                     <button 
@@ -184,17 +147,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
                         disabled={!newName.trim()}
                         className="w-full bg-[#07c160] text-white py-3 rounded-lg font-medium hover:bg-[#06ad56] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-green-200"
                     >
-                        立即注册并登录
+                        进入 / Login
                     </button>
-
-                    {users.length > 0 && (
-                        <button 
-                            onClick={() => setView('login')}
-                            className="w-full text-gray-500 py-2 text-sm hover:text-gray-800 transition-colors"
-                        >
-                            返回账号列表
-                        </button>
-                    )}
                 </div>
             )}
         </div>
@@ -249,4 +203,3 @@ const AuthModal: React.FC<AuthModalProps> = ({
 };
 
 export default AuthModal;
-    
