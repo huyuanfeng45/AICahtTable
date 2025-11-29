@@ -173,7 +173,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
                             onChange={(e) => setNewName(e.target.value)}
                             onKeyDown={handleKeyDown}
                             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-shadow"
-                            placeholder="例如：极客小张"
+                            placeholder="请输入用户名"
                             autoFocus
                         />
                          <p className="text-xs text-gray-400 mt-2">* 无需密码，注册即登录</p>
@@ -249,3 +249,4 @@ const AuthModal: React.FC<AuthModalProps> = ({
 };
 
 export default AuthModal;
+    
