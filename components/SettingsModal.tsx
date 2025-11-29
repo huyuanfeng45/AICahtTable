@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
@@ -204,7 +203,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               geminiModel: localGeminiModel,
               enableThinking: localEnableThinking,
               ossConfig: localOssConfig,
-              notificationConfig: localNotificationConfig
+              notificationConfig: localNotificationConfig,
+              userAvatar: localAvatar,
+              userName: localUserName
           };
           // Include users in manual sync
           await uploadGlobalConfig(tempSettings, localPersonas, allUsers || [], settings.userName);
@@ -232,6 +233,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               if (data.appSettings.geminiModel) setLocalGeminiModel(data.appSettings.geminiModel as any);
               if (data.appSettings.enableThinking !== undefined) setLocalEnableThinking(data.appSettings.enableThinking);
               if (data.appSettings.notificationConfig) setLocalNotificationConfig(data.appSettings.notificationConfig);
+              if (data.appSettings.userAvatar) setLocalAvatar(data.appSettings.userAvatar);
+              if (data.appSettings.userName) setLocalUserName(data.appSettings.userName);
               
               if (data.personas) setLocalPersonas(data.personas);
               

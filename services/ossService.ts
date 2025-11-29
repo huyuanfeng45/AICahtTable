@@ -102,9 +102,11 @@ export const uploadGlobalConfig = async (
       activeProvider: settings.activeProvider,
       geminiModel: settings.geminiModel,
       enableThinking: settings.enableThinking,
-      // We explicitly exclude sensitive user data or ban lists from basic sync if desired,
-      // but usually Banned IPs should be synced by Admin.
-      bannedIps: settings.bannedIps
+      bannedIps: settings.bannedIps,
+      // Synced Fields for Profile & Notification
+      notificationConfig: settings.notificationConfig,
+      userAvatar: settings.userAvatar,
+      userName: settings.userName
     },
     personas: personas,
     users: users

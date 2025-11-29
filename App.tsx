@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -137,7 +138,10 @@ const App: React.FC = () => {
                           geminiModel: data.appSettings.geminiModel || settings.geminiModel,
                           enableThinking: data.appSettings.enableThinking ?? settings.enableThinking,
                           bannedIps: data.appSettings.bannedIps || settings.bannedIps,
-                          notificationConfig: data.appSettings.notificationConfig || settings.notificationConfig
+                          notificationConfig: data.appSettings.notificationConfig || settings.notificationConfig,
+                          // Sync Profile Data (Global Defaults)
+                          userAvatar: data.appSettings.userAvatar || settings.userAvatar,
+                          userName: data.appSettings.userName || settings.userName
                       };
                       setSettings(newSettings);
                       
@@ -149,9 +153,6 @@ const App: React.FC = () => {
                       
                       // Update Users Registry from Cloud (For Admin Management)
                       if (data.users && Array.isArray(data.users)) {
-                          // Merge Strategy: Keep local new users not yet synced, update existing
-                          // For simplicity, we prioritize Cloud list but try to preserve any local-only user if ID not present?
-                          // Given this is an Admin centric feature, typically Cloud overwrites local registry to keep consistency.
                           setUsers(data.users);
                           localStorage.setItem('app_users', JSON.stringify(data.users));
                       }
@@ -364,6 +365,7 @@ const App: React.FC = () => {
                   }
                   
                   // Preserve cloud settings/personas to be safe
+                  // NOTE: This includes notificationConfig and global profile if set in cloud
                   settingsToSave = { ...settings, ...globalData.appSettings };
                   personasToSave = globalData.personas || personas;
               } else {
