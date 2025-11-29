@@ -195,5 +195,14 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   enableThinking: false,
   activeProvider: 'gemini',
   providerConfigs: DEFAULT_PROVIDER_CONFIGS,
-  bannedIps: []
+  bannedIps: [],
+  ossConfig: {
+    region: 'oss-cn-hangzhou',
+    accessKeyId: '',
+    accessKeySecret: '',
+    bucket: '',
+    path: 'ai-roundtable/config.json',
+    enabled: false,
+    autoSync: false
+  }
 };

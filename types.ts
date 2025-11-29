@@ -96,6 +96,16 @@ export interface ProviderConfig {
   fetchedModels?: ModelOption[]; // Store models fetched from API
 }
 
+export interface OssConfig {
+  region: string;
+  accessKeyId: string;
+  accessKeySecret: string;
+  bucket: string;
+  path: string; // File path in bucket, e.g. 'config/global.json'
+  enabled: boolean;
+  autoSync: boolean;
+}
+
 export interface AppSettings {
   userAvatar: string;
   userName: string;
@@ -108,6 +118,9 @@ export interface AppSettings {
   
   // Admin Security
   bannedIps: string[];
+  
+  // Global Sync
+  ossConfig?: OssConfig;
 }
 
 export interface UserProfile {

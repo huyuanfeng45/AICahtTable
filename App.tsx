@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -12,6 +13,7 @@ import AboutModal from './components/AboutModal';
 import AuthModal from './components/AuthModal';
 import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, UserProfile } from './types';
+import { downloadGlobalConfig } from './services/ossService';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
@@ -19,7 +21,8 @@ const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 - 多模型混合协作 (Gemini, DeepSeek, OpenAI)
 - 角色扮演与群聊模拟
 - 收藏夹与导出功能
-- 实时思维链展示`;
+- 实时思维链展示
+- 阿里云 OSS 配置同步`;
 
 // Persistence Helper
 function loadState<T>(key: string, defaultValue: T): T {
@@ -54,7 +57,9 @@ const App: React.FC = () => {
       const global = loadState<Partial<AppSettings>>('app_global_settings', {});
       return {
           ...DEFAULT_APP_SETTINGS,
-          bannedIps: global.bannedIps || []
+          bannedIps: global.bannedIps || [],
+          // Ensure OSS config is loaded from global if not in default
+          ossConfig: global.ossConfig || DEFAULT_APP_SETTINGS.ossConfig
       };
   });
   
@@ -78,6 +83,48 @@ const App: React.FC = () => {
   // Manage Personas State (Global for now, but editable)
   const [personas, setPersonas] = useState<Persona[]>(() => loadState('app_personas', AI_PERSONAS));
 
+  // --- Auto Sync Logic ---
+  useEffect(() => {
+      const performAutoSync = async () => {
+          if (settings.ossConfig?.enabled && settings.ossConfig?.autoSync) {
+              console.log('Attempting auto-sync from OSS...');
+              try {
+                  const data = await downloadGlobalConfig(settings);
+                  if (data) {
+                      console.log('Auto-sync successful');
+                      const newSettings = {
+                          ...settings,
+                          providerConfigs: data.appSettings.providerConfigs || settings.providerConfigs,
+                          activeProvider: data.appSettings.activeProvider || settings.activeProvider,
+                          geminiModel: data.appSettings.geminiModel || settings.geminiModel,
+                          enableThinking: data.appSettings.enableThinking ?? settings.enableThinking,
+                      };
+                      setSettings(newSettings);
+                      
+                      // Update Personas
+                      if (data.personas) {
+                          setPersonas(data.personas);
+                      }
+                      
+                      // Persist immediately
+                      localStorage.setItem('app_global_settings', JSON.stringify({
+                          providerConfigs: newSettings.providerConfigs,
+                          activeProvider: newSettings.activeProvider,
+                          geminiModel: newSettings.geminiModel,
+                          enableThinking: newSettings.enableThinking,
+                          bannedIps: newSettings.bannedIps,
+                          ossConfig: settings.ossConfig // keep original oss config
+                      }));
+                  }
+              } catch (e) {
+                  console.error('Auto-sync failed', e);
+              }
+          }
+      };
+      
+      // Run once on mount if enabled
+      performAutoSync();
+  }, []); // Only run once on mount (or when app reloads)
 
   // --- Effects for User Switching & Data Loading ---
 
@@ -103,6 +150,7 @@ const App: React.FC = () => {
               geminiModel: savedGlobalSettings.geminiModel || (savedUserSettings?.geminiModel || DEFAULT_APP_SETTINGS.geminiModel),
               enableThinking: savedGlobalSettings.enableThinking ?? (savedUserSettings?.enableThinking ?? DEFAULT_APP_SETTINGS.enableThinking),
               bannedIps: savedGlobalSettings.bannedIps || [],
+              ossConfig: savedGlobalSettings.ossConfig || (savedUserSettings?.ossConfig || DEFAULT_APP_SETTINGS.ossConfig),
               
               // Ensure user profile is preserved
               userName: savedUserSettings?.userName || currentUser.name,
@@ -205,17 +253,17 @@ const App: React.FC = () => {
         }
     }
 
-    // If Admin (Authenticated), save critical configs AND Banned IPs to Global Storage
-    if (isAuthenticated) {
-        const globalConfigToSave: Partial<AppSettings> = {
-            providerConfigs: newSettings.providerConfigs,
-            activeProvider: newSettings.activeProvider,
-            geminiModel: newSettings.geminiModel,
-            enableThinking: newSettings.enableThinking,
-            bannedIps: newSettings.bannedIps
-        };
-        localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
-    }
+    // Save Global Configs (Settings + OSS config) to local storage for persistence
+    // This allows non-admins to keep their OSS keys locally
+    const globalConfigToSave: Partial<AppSettings> = {
+        providerConfigs: newSettings.providerConfigs,
+        activeProvider: newSettings.activeProvider,
+        geminiModel: newSettings.geminiModel,
+        enableThinking: newSettings.enableThinking,
+        bannedIps: newSettings.bannedIps,
+        ossConfig: newSettings.ossConfig
+    };
+    localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
   };
 
   // --- Admin User Management Handlers ---
