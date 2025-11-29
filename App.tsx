@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -13,7 +11,7 @@ import AboutModal from './components/AboutModal';
 import AuthModal from './components/AuthModal';
 import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, UserProfile } from './types';
-import { downloadGlobalConfig, downloadUserData, uploadUserData } from './services/ossService';
+import { downloadGlobalConfig, downloadUserData, uploadUserData, uploadGlobalConfig } from './services/ossService';
 import { sendBarkNotification } from './services/notificationService';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
@@ -311,7 +309,7 @@ const App: React.FC = () => {
 
   // --- Handlers ---
 
-  const handleRegister = (name: string) => {
+  const handleRegister = async (name: string) => {
       const mockIp = generateMockIp();
       
       // Check Ban
@@ -329,16 +327,56 @@ const App: React.FC = () => {
           createdAt: Date.now(),
           lastIp: mockIp
       };
+      
+      // 1. Update Local State immediately
       setUsers(prev => [...prev, newUser]);
       setCurrentUser(newUser);
 
-      // Trigger Notification (Bark)
+      // 2. Trigger Notification (Bark)
       if (settings.notificationConfig?.enabled) {
           sendBarkNotification(
             '新用户注册 (New User)', 
             `用户 "${name}" 已注册。\nIP: ${mockIp}`, 
             settings.notificationConfig
           );
+      }
+
+      // 3. Sync to Cloud Registry (Admin View)
+      if (settings.ossConfig?.enabled) {
+          try {
+              console.log('Registering user to cloud registry...');
+              
+              // Use current settings context to download latest config
+              // We need to fetch the latest list to avoid overwriting recent registrations
+              const globalData = await downloadGlobalConfig(settings);
+              
+              let usersToSave = [newUser];
+              let settingsToSave = settings;
+              let personasToSave = personas;
+
+              if (globalData) {
+                  const existingUsers = globalData.users || [];
+                  // Append new user if not exists
+                  if (!existingUsers.find(u => u.id === newUser.id)) {
+                      usersToSave = [...existingUsers, newUser];
+                  } else {
+                      usersToSave = existingUsers;
+                  }
+                  
+                  // Preserve cloud settings/personas to be safe
+                  settingsToSave = { ...settings, ...globalData.appSettings };
+                  personasToSave = globalData.personas || personas;
+              } else {
+                  // Fallback to local + new if no cloud config found
+                  usersToSave = [...users, newUser];
+              }
+
+              await uploadGlobalConfig(settingsToSave, personasToSave, usersToSave, newUser.name);
+              console.log('User registered to cloud successfully.');
+          } catch (e) {
+              console.error('Failed to register user to cloud registry', e);
+              // Non-blocking error: User can still use the app locally
+          }
       }
   };
 
