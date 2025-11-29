@@ -1,5 +1,5 @@
 
-import { OssConfig, AppSettings, Persona } from '../types';
+import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry } from '../types';
 
 // Declare global OSS if not typed
 declare global {
@@ -13,6 +13,14 @@ export interface GlobalSyncData {
   updatedBy: string;
   appSettings: Partial<AppSettings>; // Contains providerConfigs, activeProvider, etc.
   personas: Persona[];
+}
+
+export interface UserCloudData {
+  timestamp: number;
+  userId: string;
+  chats: ChatGroup[];
+  favorites: Favorite[];
+  changelogs: ChangelogEntry[];
 }
 
 const MAX_RETRY_TIME = 10000; // 10 seconds
@@ -55,6 +63,15 @@ function createOssClient(config: OssConfig) {
     bucket,
     secure: true
   });
+}
+
+function getUserBackupPath(config: OssConfig, userId: string): string {
+  // Determine base folder from global path
+  const globalPath = config.path || 'ai-roundtable/config.json';
+  const lastSlashIndex = globalPath.lastIndexOf('/');
+  const baseDir = lastSlashIndex !== -1 ? globalPath.substring(0, lastSlashIndex) : 'ai-roundtable';
+  
+  return `${baseDir}/users/${userId}.json`;
 }
 
 /**
@@ -118,8 +135,7 @@ export const downloadGlobalConfig = async (
   const path = settings.ossConfig.path || 'ai-roundtable/config.json';
 
   try {
-    // Add a random query param to bypass CDN cache if necessary, though OSS SDK handles signature.
-    // Standard get request:
+    // Standard get request
     const result = await client.get(path);
     if (result.content) {
        const text = new TextDecoder('utf-8').decode(result.content);
@@ -127,7 +143,72 @@ export const downloadGlobalConfig = async (
     }
     return null;
   } catch (err) {
+    // If file doesn't exist (new setup), return null instead of throwing
+    if (String(err).includes('NoSuchKey') || String(err).includes('404')) {
+      return null;
+    }
     console.error('OSS Download Failed', err);
+    throw err;
+  }
+};
+
+/**
+ * Uploads User Data (Chats, etc) to OSS
+ */
+export const uploadUserData = async (
+  settings: AppSettings,
+  userId: string,
+  data: { chats: ChatGroup[], favorites: Favorite[], changelogs: ChangelogEntry[] }
+): Promise<void> => {
+  if (!settings.ossConfig?.enabled) return;
+
+  await waitForOSS();
+  const client = createOssClient(settings.ossConfig);
+  const path = getUserBackupPath(settings.ossConfig, userId);
+
+  const cloudData: UserCloudData = {
+    timestamp: Date.now(),
+    userId,
+    ...data
+  };
+
+  const content = JSON.stringify(cloudData);
+  const blob = new Blob([content], { type: 'application/json' });
+
+  try {
+    await client.put(path, blob);
+  } catch (err) {
+    console.error(`User Data Upload Failed (${userId})`, err);
+    throw err;
+  }
+};
+
+/**
+ * Downloads User Data from OSS
+ */
+export const downloadUserData = async (
+  settings: AppSettings,
+  userId: string
+): Promise<UserCloudData | null> => {
+  if (!settings.ossConfig?.enabled) return null;
+
+  await waitForOSS();
+  const client = createOssClient(settings.ossConfig);
+  const path = getUserBackupPath(settings.ossConfig, userId);
+
+  try {
+    const result = await client.get(path);
+    if (result.content) {
+      const text = new TextDecoder('utf-8').decode(result.content);
+      return JSON.parse(text) as UserCloudData;
+    }
+    return null;
+  } catch (err) {
+    // Ignore 404 for new users
+    if (String(err).includes('NoSuchKey') || String(err).includes('404')) {
+      return null;
+    }
+    console.error(`User Data Download Failed (${userId})`, err);
     throw err;
   }
 };

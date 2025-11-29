@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
 import ContactList from './components/ContactList';
@@ -12,7 +12,7 @@ import AboutModal from './components/AboutModal';
 import AuthModal from './components/AuthModal';
 import { MOCK_CHATS, DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
 import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, UserProfile } from './types';
-import { downloadGlobalConfig } from './services/ossService';
+import { downloadGlobalConfig, downloadUserData, uploadUserData } from './services/ossService';
 
 const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
 
@@ -112,7 +112,10 @@ const App: React.FC = () => {
   // Determine if Config is present (for UI feedback)
   const isOssConfigured = !!(settings.ossConfig?.accessKeyId && settings.ossConfig?.bucket);
 
-  // --- Auto Sync Logic ---
+  // Ref for debounced save
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- Auto Sync Logic (Global Config) ---
   useEffect(() => {
       const performAutoSync = async () => {
           if (settings.ossConfig?.enabled && settings.ossConfig?.autoSync) {
@@ -175,44 +178,58 @@ const App: React.FC = () => {
   // Load user-specific data when currentUser changes
   useEffect(() => {
       if (currentUser) {
-          // Load User Data
+          // 1. Load from LocalStorage first (Instant interaction)
           setChats(loadState(`app_chats_${currentUser.id}`, MOCK_CHATS));
           setFavorites(loadState(`app_favorites_${currentUser.id}`, []));
           setChangelogs(loadState(`app_changelogs_${currentUser.id}`, MOCK_CHANGELOGS));
           
-          // Load Settings logic with Global Config inheritance
+          // 2. Load Settings
           const savedUserSettings = loadState<AppSettings | null>(`app_settings_${currentUser.id}`, null);
           const savedGlobalSettings = loadState<Partial<AppSettings>>('app_global_settings', {});
           
-          // Determine Env OSS Config again for user-switch scenario
+          // Determine Env OSS Config
           const envOssConfig = DEFAULT_APP_SETTINGS.ossConfig;
           const hasEnvOss = envOssConfig && envOssConfig.accessKeyId && envOssConfig.bucket;
 
-          // Merge logic
           const mergedSettings: AppSettings = {
               ...DEFAULT_APP_SETTINGS,
               ...savedUserSettings,
-              // Force override global configs
               providerConfigs: savedGlobalSettings.providerConfigs || (savedUserSettings?.providerConfigs || DEFAULT_APP_SETTINGS.providerConfigs),
               activeProvider: savedGlobalSettings.activeProvider || (savedUserSettings?.activeProvider || DEFAULT_APP_SETTINGS.activeProvider),
               geminiModel: savedGlobalSettings.geminiModel || (savedUserSettings?.geminiModel || DEFAULT_APP_SETTINGS.geminiModel),
               enableThinking: savedGlobalSettings.enableThinking ?? (savedUserSettings?.enableThinking ?? DEFAULT_APP_SETTINGS.enableThinking),
               bannedIps: savedGlobalSettings.bannedIps || [],
-              
-              // OSS Config Logic: Priority = Env > SavedGlobal > SavedUser > Default
               ossConfig: hasEnvOss ? {
                   ...envOssConfig,
-                  // Force enable/autoSync if env vars exist
                   enabled: true,
                   autoSync: true,
               } : (savedGlobalSettings.ossConfig || (savedUserSettings?.ossConfig || DEFAULT_APP_SETTINGS.ossConfig)),
-              
-              // Ensure user profile is preserved
               userName: savedUserSettings?.userName || currentUser.name,
               userAvatar: savedUserSettings?.userAvatar || currentUser.avatar,
           };
           
           setSettings(mergedSettings);
+
+          // 3. Cloud Sync: Attempt to download User Data from OSS if enabled
+          if (mergedSettings.ossConfig?.enabled && mergedSettings.ossConfig?.autoSync) {
+              setSyncStatus('正在同步个人数据...');
+              downloadUserData(mergedSettings, currentUser.id).then(cloudData => {
+                  if (cloudData) {
+                      console.log('User data loaded from cloud', cloudData);
+                      // Merge strategy: Cloud overwrite local if exists
+                      if(cloudData.chats) setChats(cloudData.chats);
+                      if(cloudData.favorites) setFavorites(cloudData.favorites);
+                      if(cloudData.changelogs) setChangelogs(cloudData.changelogs);
+                      setSyncStatus('数据已同步');
+                  } else {
+                      setSyncStatus('');
+                  }
+                  setTimeout(() => setSyncStatus(''), 2000);
+              }).catch(e => {
+                  console.error('User data sync failed', e);
+                  setSyncStatus('数据同步失败');
+              });
+          }
 
           // Reset selection
           setSelectedChatId('');
@@ -222,13 +239,43 @@ const App: React.FC = () => {
       }
   }, [currentUser]);
 
+  // --- Auto-Save User Data Logic (Debounced) ---
+  useEffect(() => {
+    // Only save if user logged in and OSS enabled
+    if (currentUser && settings.ossConfig?.enabled) {
+        // Clear previous timeout
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+        // Debounce 3 seconds
+        saveTimeoutRef.current = setTimeout(() => {
+            console.log('Auto-saving user data to cloud...');
+            // setSyncStatus('正在保存...');
+            uploadUserData(settings, currentUser.id, {
+                chats,
+                favorites,
+                changelogs
+            }).then(() => {
+                // setSyncStatus('已保存到云端');
+                // setTimeout(() => setSyncStatus(''), 2000);
+            }).catch(e => {
+                console.error("Auto save failed", e);
+            });
+        }, 3000);
+    }
+    
+    return () => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, [chats, favorites, changelogs, currentUser, settings.ossConfig?.enabled]);
+
+
   // Persist Users List
   useEffect(() => { localStorage.setItem('app_users', JSON.stringify(users)); }, [users]);
   
-  // Persist Global Personas (This is redundant if sync runs, but good for edits)
+  // Persist Global Personas
   useEffect(() => { localStorage.setItem('app_personas', JSON.stringify(personas)); }, [personas]);
 
-  // Persist User-Specific Data
+  // Persist User-Specific Data (Local)
   useEffect(() => { 
       if(currentUser) localStorage.setItem(`app_chats_${currentUser.id}`, JSON.stringify(chats)); 
   }, [chats, currentUser]);
@@ -242,7 +289,6 @@ const App: React.FC = () => {
   }, [changelogs, currentUser]);
   
   useEffect(() => { 
-      // We save user-specific settings (like avatar/name) to their own key
       if(currentUser) localStorage.setItem(`app_settings_${currentUser.id}`, JSON.stringify(settings)); 
   }, [settings, currentUser]);
 
@@ -309,7 +355,6 @@ const App: React.FC = () => {
     }
 
     // Save Global Configs (Settings + OSS config) to local storage for persistence
-    // This allows non-admins to keep their OSS keys locally
     const globalConfigToSave: Partial<AppSettings> = {
         providerConfigs: newSettings.providerConfigs,
         activeProvider: newSettings.activeProvider,
