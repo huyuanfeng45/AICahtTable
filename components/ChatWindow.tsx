@@ -754,7 +754,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
             {/* Text Input */}
             <textarea
             ref={textareaRef}
-            className="flex-1 w-full bg-[#f5f5f5] resize-none px-4 py-1 text-[14px] text-gray-800 focus:outline-none placeholder-gray-400 custom-scrollbar font-normal"
+            className="flex-1 w-full bg-[#f5f5f5] resize-none px-4 py-1 text-[16px] md:text-[14px] text-gray-800 focus:outline-none placeholder-gray-400 custom-scrollbar font-normal"
             placeholder=""
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
