@@ -1067,11 +1067,54 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                          </div>
                                          <div>
                                              <label className="block text-xs font-medium text-gray-500 mb-1">Model ID</label>
-                                             <input 
-                                                value={persona.config.modelId}
-                                                onChange={(e) => updatePersonaConfig(persona.id, 'modelId', e.target.value)}
-                                                className="w-full text-xs border rounded px-2 py-1"
-                                             />
+                                             {/* Dynamic Select for Models */}
+                                             {(() => {
+                                                 const pid = persona.config.provider;
+                                                 const pConfig = localProviderConfigs[pid];
+                                                 const pStatic = MODEL_PROVIDERS.find(p => p.id === pid);
+                                                 
+                                                 // Get available models (Fetched > Static)
+                                                 let available = pConfig?.fetchedModels?.length 
+                                                    ? pConfig.fetchedModels 
+                                                    : (pStatic?.models || []);
+                                                 
+                                                 // Guard: If empty, show basic input
+                                                 if (available.length === 0) {
+                                                     return (
+                                                         <input 
+                                                            value={persona.config.modelId}
+                                                            onChange={(e) => updatePersonaConfig(persona.id, 'modelId', e.target.value)}
+                                                            className="w-full text-xs border rounded px-2 py-1"
+                                                         />
+                                                     );
+                                                 }
+
+                                                 // Ensure current value is preserved in options (if custom or old)
+                                                 const current = persona.config.modelId;
+                                                 if (current && !available.some(m => m.id === current)) {
+                                                     available = [{ id: current, name: `${current} (Custom)` }, ...available];
+                                                 }
+
+                                                 return (
+                                                    <div className="relative">
+                                                        <select 
+                                                            value={persona.config.modelId}
+                                                            onChange={(e) => updatePersonaConfig(persona.id, 'modelId', e.target.value)}
+                                                            className="w-full text-xs border rounded px-2 py-1 bg-white appearance-none pr-6"
+                                                        >
+                                                            {available.map(m => (
+                                                                <option key={m.id} value={m.id}>
+                                                                    {m.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        {/* Custom Arrow to indicate Select */}
+                                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                                            <svg className="fill-current h-3 w-3" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                                                        </div>
+                                                    </div>
+                                                 );
+                                             })()}
                                          </div>
                                      </div>
                                  </div>
