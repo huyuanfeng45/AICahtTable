@@ -137,6 +137,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     };
     addMessage(userMsg);
     
+    // Maintain a local history context for the loop, so AIs can see previous AI messages immediately
+    // (React State update is async, so messagesRef.current won't update instantly inside the loop)
+    const conversationContext = [...messagesRef.current, userMsg];
+    
     // Update Sidebar Preview & Trigger Sync
     updateLastMessage(userText);
 
@@ -148,7 +152,28 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         ? chat.members 
         : (chat.id === 'group_main' ? allPersonas.map(p => p.id) : []);
     
-    if (chat.config?.enableRandomOrder) {
+    if (chat.config?.enableAutoDiscussion) {
+        // --- Discussion Mode Logic ---
+        // 1. Everyone speaks 2 times (default)
+        // 2. Order is random and interleaved
+        
+        memberIds.forEach(id => {
+            const persona = allPersonas.find(p => p.id === id);
+            if (persona) {
+                // Add to queue twice
+                speechQueue.push(persona);
+                speechQueue.push(persona);
+            }
+        });
+
+        // Fisher-Yates Shuffle for true randomness
+        for (let i = speechQueue.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [speechQueue[i], speechQueue[j]] = [speechQueue[j], speechQueue[i]];
+        }
+        
+    } else if (chat.config?.enableRandomOrder) {
+        // --- Random Order Logic (Single Turn per configured ReplyCount) ---
         // Random Mode: Flatten all turns and shuffle them completely
         memberIds.forEach(id => {
             const persona = allPersonas.find(p => p.id === id);
@@ -167,7 +192,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         }
 
     } else {
-        // Ordered Mode: Respect Speaking Order and Group turns (A, A, B)
+        // --- Standard Ordered Logic ---
+        // Respect Speaking Order and Group turns (A, A, B)
         let orderedIds: string[] = [];
         const configOrder = chat.config?.speakingOrder || [];
         
@@ -200,17 +226,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         for (const persona of speechQueue) {
             setProcessingSpeakerName(persona.name);
             
-            // OPTIMIZATION: Reduced artificial delay to 200ms (was 1000ms+)
-            // Just enough to allow state updates to settle visually, but fast.
+            // OPTIMIZATION: Reduced artificial delay to 200ms
             await new Promise(resolve => setTimeout(resolve, 200));
             
-            // Get current history
-            const currentHistory = messagesRef.current;
-
             const responseText = await generatePersonaResponse(
                 persona,
                 userText,
-                currentHistory,
+                conversationContext, // Use the updated local context
                 allPersonas,
                 settings 
             );
@@ -222,7 +244,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                 timestamp: Date.now(),
                 isUser: false
             };
+            
             addMessage(aiMsg);
+            
+            // Critical: Push to local context so next AI in loop sees this message
+            conversationContext.push(aiMsg);
             
             // Update Sidebar Preview & Trigger Sync on AI response
             updateLastMessage(responseText);

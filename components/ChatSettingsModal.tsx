@@ -36,6 +36,7 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   // Speaking Order State
   const [speakingOrder, setSpeakingOrder] = useState<string[]>([]);
   const [enableRandomOrder, setEnableRandomOrder] = useState(false);
+  const [enableAutoDiscussion, setEnableAutoDiscussion] = useState(false);
 
   const [isGeneratingName, setIsGeneratingName] = useState(false);
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
@@ -48,6 +49,7 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
       setMemberConfigs(chat.config?.memberConfigs || {});
       setSummaryAgentId(chat.config?.summaryAgentId || '');
       setEnableRandomOrder(chat.config?.enableRandomOrder || false);
+      setEnableAutoDiscussion(chat.config?.enableAutoDiscussion || false);
       
       // Initialize speaking order with integrity check
       const currentMemberSet = new Set(chat.members);
@@ -75,7 +77,8 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
         memberConfigs: memberConfigs,
         summaryAgentId: summaryAgentId || undefined,
         speakingOrder: speakingOrder,
-        enableRandomOrder: enableRandomOrder
+        enableRandomOrder: enableRandomOrder,
+        enableAutoDiscussion: enableAutoDiscussion
       }
     };
     onUpdateChat(updatedChat);
@@ -296,19 +299,53 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
           <div>
              <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-medium text-gray-700">发言顺序</label>
-                <div className="flex items-center">
+             </div>
+
+             <div className="flex flex-col gap-2 mb-3">
+                 <div className="flex items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-pointer" onClick={() => {setEnableAutoDiscussion(true); setEnableRandomOrder(false)}}>
                     <input 
-                      id="randomOrder"
-                      type="checkbox"
-                      checked={enableRandomOrder}
-                      onChange={(e) => setEnableRandomOrder(e.target.checked)}
-                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                      type="radio"
+                      name="orderType"
+                      checked={enableAutoDiscussion}
+                      onChange={() => {setEnableAutoDiscussion(true); setEnableRandomOrder(false)}}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                     />
-                    <label htmlFor="randomOrder" className="ml-2 text-xs text-gray-600 select-none cursor-pointer">随机顺序 (Random)</label>
-                </div>
+                    <div className="ml-2">
+                        <span className="text-sm font-medium text-gray-700 block">AI 互相讨论 (AI Mutual Discussion)</span>
+                        <span className="text-xs text-gray-500">角色之间可互相回复，随机发言，每人发言约 2 次 (不连续)。</span>
+                    </div>
+                 </div>
+
+                 <div className="flex items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-pointer" onClick={() => {setEnableAutoDiscussion(false); setEnableRandomOrder(true)}}>
+                    <input 
+                      type="radio"
+                      name="orderType"
+                      checked={!enableAutoDiscussion && enableRandomOrder}
+                      onChange={() => {setEnableAutoDiscussion(false); setEnableRandomOrder(true)}}
+                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                    />
+                    <div className="ml-2">
+                        <span className="text-sm font-medium text-gray-700 block">随机顺序 (Random Order)</span>
+                        <span className="text-xs text-gray-500">按照"发言次数"设置，随机打乱所有发言顺序。</span>
+                    </div>
+                 </div>
+
+                 <div className="flex items-center p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-200 cursor-pointer" onClick={() => {setEnableAutoDiscussion(false); setEnableRandomOrder(false)}}>
+                    <input 
+                      type="radio"
+                      name="orderType"
+                      checked={!enableAutoDiscussion && !enableRandomOrder}
+                      onChange={() => {setEnableAutoDiscussion(false); setEnableRandomOrder(false)}}
+                      className="h-4 w-4 text-gray-600 focus:ring-gray-500 border-gray-300"
+                    />
+                    <div className="ml-2">
+                        <span className="text-sm font-medium text-gray-700 block">固定顺序 (Fixed Order)</span>
+                        <span className="text-xs text-gray-500">按照下方列表的顺序依次发言。</span>
+                    </div>
+                 </div>
              </div>
              
-             {!enableRandomOrder && selectedMembers.length > 0 && (
+             {!enableRandomOrder && !enableAutoDiscussion && selectedMembers.length > 0 && (
                  <div className="border border-gray-100 rounded-lg p-2 space-y-1 bg-gray-50/50">
                     {speakingOrder.map((id, index) => {
                        const persona = allPersonas.find(p => p.id === id);
@@ -339,11 +376,6 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
                            </div>
                        );
                     })}
-                 </div>
-             )}
-             {enableRandomOrder && (
-                 <div className="p-3 bg-gray-50 rounded text-xs text-gray-500 text-center border border-dashed border-gray-200">
-                     启用随机顺序后，每轮对话 AI 的发言次序将随机打乱。
                  </div>
              )}
           </div>

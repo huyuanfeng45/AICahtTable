@@ -34,6 +34,7 @@ export interface ChatGroupConfig {
   summaryAgentId?: string; // ID of the agent responsible for summaries
   speakingOrder?: string[]; // Array of persona IDs defining the order
   enableRandomOrder?: boolean; // Toggle for randomizing speaking order
+  enableAutoDiscussion?: boolean; // Toggle for AI mutual discussion mode (2 turns, shuffled)
 }
 
 export interface ChatGroup {
