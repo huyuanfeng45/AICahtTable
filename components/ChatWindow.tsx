@@ -4,7 +4,7 @@ import { USER_ID } from '../constants';
 import MessageBubble from './MessageBubble';
 import ChatSettingsModal from './ChatSettingsModal';
 import EmojiPicker from './EmojiPicker';
-import { generatePersonaResponse } from '../services/geminiService';
+import { generatePersonaResponse, generateChatName, generateImagePrompt } from '../services/geminiService';
 
 interface ChatWindowProps {
   chat: ChatGroup;
@@ -54,6 +54,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   });
 
   const messagesRef = useRef<Message[]>(messages);
+  const chatRef = useRef<ChatGroup>(chat);
+  const hasTriggeredAutoRename = useRef(false);
   
   // Sync ref and LocalStorage
   useEffect(() => {
@@ -64,6 +66,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
     }
   }, [messages, chat.isReadOnly, STORAGE_KEY]);
+
+  // Keep chatRef updated for async operations
+  useEffect(() => {
+      chatRef.current = chat;
+  }, [chat]);
+
+  // Reset auto-rename trigger when switching chats
+  useEffect(() => {
+      hasTriggeredAutoRename.current = false;
+  }, [chat.id]);
 
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -215,6 +227,39 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
             addMessage(aiMsg);
             conversationContext.push(aiMsg);
             updateLastMessage(responseText);
+
+            // Auto-rename logic for new chats
+            if (chatRef.current.name === '新建群聊' && !hasTriggeredAutoRename.current) {
+                hasTriggeredAutoRename.current = true;
+                
+                (async () => {
+                   try {
+                       const newName = await generateChatName(conversationContext, allPersonas, settings);
+                       if (newName) {
+                           const cleanName = newName.replace(/^["'《]+|["'》]+$/g, '').trim();
+                           let newAvatar = chatRef.current.avatar;
+                           
+                           try {
+                               const imgPrompt = await generateImagePrompt(cleanName, settings);
+                               const encodedPrompt = encodeURIComponent(imgPrompt);
+                               newAvatar = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=200&height=200&nologo=true`;
+                           } catch (err) {
+                               console.warn("Avatar auto-gen failed", err);
+                           }
+                           
+                           if (chatRef.current.id === chat.id) {
+                               onUpdateChat({
+                                   ...chatRef.current,
+                                   name: cleanName,
+                                   avatar: newAvatar
+                               });
+                           }
+                       }
+                   } catch (e) {
+                       console.error("Auto rename failed", e);
+                   }
+                })();
+            }
         }
     } catch (e) {
         console.error(e);

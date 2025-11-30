@@ -158,17 +158,17 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
       <div className="bg-white rounded-lg shadow-xl w-[90vw] md:w-[500px] max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+        <div className="px-4 md:px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
           <h3 className="text-lg font-medium text-gray-900">群聊设置</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+        <div className="p-4 md:p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
           
           {/* Identity Section (Compact) */}
-          <div className="flex gap-4 items-center">
+          <div className="flex gap-3 md:gap-4 items-center">
                 <div className="flex-shrink-0 relative group">
                     <img 
                         src={avatar} 
@@ -178,21 +178,21 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
                     />
                 </div>
                 
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-3 min-w-0">
                     <div className="flex items-center gap-2">
                          <label className="text-sm font-medium text-gray-700 w-12 flex-shrink-0">名称</label>
-                         <div className="flex-1 flex gap-2">
+                         <div className="flex-1 flex gap-2 min-w-0">
                              <input
                                 type="text"
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-green-500 focus:border-green-500"
+                                className="flex-1 min-w-0 border border-gray-300 rounded px-2 py-1 text-sm focus:ring-green-500 focus:border-green-500"
                                 placeholder="群聊名称"
                             />
                             <button 
                                 onClick={handleAutoGenerateName}
                                 disabled={isGeneratingName}
-                                className="px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200 rounded text-xs whitespace-nowrap hover:bg-gray-100 flex items-center gap-1"
+                                className="px-2 py-1 bg-gray-50 text-gray-600 border border-gray-200 rounded text-xs whitespace-nowrap hover:bg-gray-100 flex items-center gap-1 flex-shrink-0"
                                 title="自动生成"
                             >
                                 {isGeneratingName ? (
@@ -205,18 +205,18 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
                     </div>
                     <div className="flex items-center gap-2">
                          <label className="text-sm font-medium text-gray-700 w-12 flex-shrink-0">头像</label>
-                         <div className="flex-1 flex gap-2">
+                         <div className="flex-1 flex gap-2 min-w-0">
                              <input
                                 type="text"
                                 value={avatar}
                                 onChange={(e) => setAvatar(e.target.value)}
-                                className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 focus:ring-green-500 focus:border-green-500 font-mono"
+                                className="flex-1 min-w-0 border border-gray-300 rounded px-2 py-1 text-xs text-gray-600 focus:ring-green-500 focus:border-green-500 font-mono"
                                 placeholder="https://..."
                             />
                              <button 
                                 onClick={handleAutoGenerateAvatar}
                                 disabled={isGeneratingAvatar || !name}
-                                className="px-2 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded text-xs whitespace-nowrap hover:bg-purple-100 flex items-center gap-1"
+                                className="px-2 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded text-xs whitespace-nowrap hover:bg-purple-100 flex items-center gap-1 flex-shrink-0"
                                 title="AI 生成"
                             >
                                 {isGeneratingAvatar ? (
@@ -408,7 +408,7 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
           <div className="h-4"></div>
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
+        <div className="px-4 md:px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">取消</button>
            <button onClick={handleSave} className="px-4 py-2 text-sm bg-[#07c160] text-white rounded hover:bg-[#06ad56]">保存设置</button>
         </div>
