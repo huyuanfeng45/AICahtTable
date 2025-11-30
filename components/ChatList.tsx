@@ -65,7 +65,7 @@ const ChatList: React.FC<ChatListProps> = ({
                         </div>
                         <h3 className="text-sm font-medium text-gray-600 mb-1">暂无会话</h3>
                         <p className="text-[11px] text-gray-500 mb-4 leading-relaxed">
-                            点击顶部 <span className="font-bold text-gray-700 mx-0.5">+</span> 号<br/>
+                            点击顶部 <span className="font-bold text-gray-700 mx-0.5 inline-block border border-gray-300 rounded px-1 bg-white shadow-sm">+</span> 号<br/>
                             开启一个新的 AI 讨论
                         </p>
                         <button 
@@ -93,6 +93,7 @@ const ChatList: React.FC<ChatListProps> = ({
                     src={chat.avatar} 
                     alt={chat.name} 
                     className="w-10 h-10 rounded-sm object-cover" 
+                    onError={(e) => (e.currentTarget.src = `https://ui-avatars.com/api/?name=${chat.name.substring(0,2)}&background=random`)}
                 />
                 {chat.unreadCount ? (
                     <div className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] px-1 min-w-[16px] h-[16px] rounded-full flex items-center justify-center z-10">

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatGroup, Message, Persona, AppSettings, Favorite } from '../types';
 import { USER_ID } from '../constants';
@@ -22,10 +20,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   const STORAGE_KEY = `chat_msgs_${chat.id}`;
 
   // Initialize state from LocalStorage or Defaults
-  // Note: Since App.tsx uses key={chat.id}, this component remounts on chat switch,
-  // so this initializer runs every time the user switches chats.
   const [messages, setMessages] = useState<Message[]>(() => {
-    // 1. If readonly (Favorites), use the messages passed in the prop (injected via type assertion in App.tsx)
+    // 1. If readonly (Favorites), use the messages passed in the prop
     if ((chat as any).messages) {
       return (chat as any).messages;
     }
@@ -71,7 +67,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
 
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingSpeakerName, setProcessingSpeakerName] = useState<string | null>(null); // New: Track who is thinking
+  const [processingSpeakerName, setProcessingSpeakerName] = useState<string | null>(null);
   const [isChatSettingsOpen, setIsChatSettingsOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -99,7 +95,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     if (!chat.isReadOnly) {
         textareaRef.current?.focus();
     }
-    setShowEmojiPicker(false); // Close emoji picker when switching chats
+    setShowEmojiPicker(false); 
     setShowExportMenu(false);
     setIsSelectionMode(false);
     setSelectedMsgIds(new Set());
@@ -110,7 +106,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     setMessages(prev => [...prev, msg]);
   };
 
-  // Helper to trigger parent update (for lastMessage preview and Sync triggers)
   const updateLastMessage = (text: string) => {
       onUpdateChat({
           ...chat,
@@ -127,7 +122,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     setIsProcessing(true);
     setProcessingSpeakerName(null);
 
-    // 1. Add User Message
     const userMsg: Message = {
       id: Date.now().toString(),
       senderId: USER_ID,
@@ -137,44 +131,29 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     };
     addMessage(userMsg);
     
-    // Maintain a local history context for the loop, so AIs can see previous AI messages immediately
-    // (React State update is async, so messagesRef.current won't update instantly inside the loop)
     const conversationContext = [...messagesRef.current, userMsg];
-    
-    // Update Sidebar Preview & Trigger Sync
     updateLastMessage(userText);
 
-    // 2. Determine Order & Build Queue
+    // Determine Order & Build Queue
     let speechQueue: Persona[] = [];
-    
-    // Determine active members (IDs)
     const memberIds = chat.members.length > 0 
         ? chat.members 
         : (chat.id === 'group_main' ? allPersonas.map(p => p.id) : []);
     
     if (chat.config?.enableAutoDiscussion) {
-        // --- Discussion Mode Logic ---
-        // 1. Everyone speaks 2 times (default)
-        // 2. Order is random and interleaved
-        
         memberIds.forEach(id => {
             const persona = allPersonas.find(p => p.id === id);
             if (persona) {
-                // Add to queue twice
                 speechQueue.push(persona);
                 speechQueue.push(persona);
             }
         });
-
-        // Fisher-Yates Shuffle for true randomness
+        // Shuffle
         for (let i = speechQueue.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [speechQueue[i], speechQueue[j]] = [speechQueue[j], speechQueue[i]];
         }
-        
     } else if (chat.config?.enableRandomOrder) {
-        // --- Random Order Logic (Single Turn per configured ReplyCount) ---
-        // Random Mode: Flatten all turns and shuffle them completely
         memberIds.forEach(id => {
             const persona = allPersonas.find(p => p.id === id);
             if (persona) {
@@ -184,27 +163,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                 }
             }
         });
-
-        // Fisher-Yates Shuffle
+        // Shuffle
         for (let i = speechQueue.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [speechQueue[i], speechQueue[j]] = [speechQueue[j], speechQueue[i]];
         }
-
     } else {
-        // --- Standard Ordered Logic ---
-        // Respect Speaking Order and Group turns (A, A, B)
         let orderedIds: string[] = [];
         const configOrder = chat.config?.speakingOrder || [];
-        
-        // Ensure integrity: Start with configOrder, keep only those currently active
         orderedIds = configOrder.filter(id => memberIds.includes(id));
-        
-        // Append any active members that might be missing from the configured order (e.g. newly added)
         const missing = memberIds.filter(id => !orderedIds.includes(id));
         orderedIds = [...orderedIds, ...missing];
 
-        // Populate queue
         orderedIds.forEach(id => {
             const persona = allPersonas.find(p => p.id === id);
             if (persona) {
@@ -216,7 +186,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         });
     }
 
-    // If no queue (empty chat), just stop
     if (speechQueue.length === 0) {
         setIsProcessing(false);
         return;
@@ -225,14 +194,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
     try {
         for (const persona of speechQueue) {
             setProcessingSpeakerName(persona.name);
-            
-            // OPTIMIZATION: Reduced artificial delay to 200ms
             await new Promise(resolve => setTimeout(resolve, 200));
             
             const responseText = await generatePersonaResponse(
                 persona,
                 userText,
-                conversationContext, // Use the updated local context
+                conversationContext,
                 allPersonas,
                 settings 
             );
@@ -246,11 +213,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
             };
             
             addMessage(aiMsg);
-            
-            // Critical: Push to local context so next AI in loop sees this message
             conversationContext.push(aiMsg);
-            
-            // Update Sidebar Preview & Trigger Sync on AI response
             updateLastMessage(responseText);
         }
     } catch (e) {
@@ -277,7 +240,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       if (!summarizer) return;
       
       setIsProcessing(true);
-      setProcessingSpeakerName(summarizer.name); // Show who is summarizing
+      setProcessingSpeakerName(summarizer.name);
 
       try {
           const responseText = await generatePersonaResponse(
@@ -303,21 +266,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       }
   };
   
-  // Clear History Logic
   const handleClearHistory = () => {
-      // 1. Update State immediately
       setMessages([]);
-      
-      // 2. Clear Local Storage
       if (!chat.isReadOnly) {
           localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
       }
-      
-      // 3. Update parent chat metadata (sidebar preview)
-      onUpdateChat({
-          ...chat,
-          lastMessage: ''
-      });
+      onUpdateChat({ ...chat, lastMessage: '' });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -326,8 +280,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       handleSendMessage();
     }
   };
-  
-  // --- Favorites Logic ---
   
   const toggleSelectMessage = (msgId: string) => {
       const newSet = new Set(selectedMsgIds);
@@ -341,11 +293,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   
   const handleSaveSelected = () => {
       if (selectedMsgIds.size === 0) return;
-      
       const msgsToSave = messages.filter(m => selectedMsgIds.has(m.id));
       onAddToFavorites?.(msgsToSave, chat.name);
-      
-      // Exit selection mode
       setIsSelectionMode(false);
       setSelectedMsgIds(new Set());
   };
@@ -359,9 +308,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       onAddToFavorites?.([msg], chat.name);
   };
 
-
-  // --- Export / Helpers ---
-  
   const handleEmojiSelect = (emoji: string) => {
       if (textareaRef.current) {
         const start = textareaRef.current.selectionStart;
@@ -399,12 +345,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                     const separator = prev.trim() ? '\n\n' : '';
                     return `${prev}${separator}![${file.name}](${result})`;
                 });
-                setTimeout(() => {
-                    if (textareaRef.current) {
-                        textareaRef.current.focus();
-                        textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
-                    }
-                }, 100);
             }
         };
         reader.readAsDataURL(file);
@@ -418,15 +358,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                     const separator = prev.trim() ? '\n\n' : '';
                     return `${prev}${separator}File: ${file.name}\n\`\`\`${ext}\n${content}\n\`\`\``;
                 });
-                setTimeout(() => {
-                    if (textareaRef.current) {
-                        textareaRef.current.focus();
-                        textareaRef.current.scrollTop = textareaRef.current.scrollHeight;
-                    }
-                }, 100);
             }
         };
-        reader.onerror = () => { alert("无法读取文件内容。"); };
         reader.readAsText(file);
     }
     e.target.value = '';
@@ -455,9 +388,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
   const handleExportImage = async () => {
     setIsExporting(true);
       setShowExportMenu(false);
-
       if (!chatContainerRef.current) return;
-
       try {
           const original = chatContainerRef.current;
           const clone = original.cloneNode(true) as HTMLElement;
@@ -470,7 +401,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
           clone.style.overflow = 'visible';
           clone.style.zIndex = '-9999';
           clone.style.background = '#f5f5f5'; 
-
           document.body.appendChild(clone);
           const html2canvas = (window as any).html2canvas;
           
@@ -486,9 +416,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
               scale: 2, 
               windowWidth: original.offsetWidth,
           });
-
           document.body.removeChild(clone);
-
           const dataUrl = canvas.toDataURL('image/png');
           const link = document.createElement('a');
           link.download = `${chat.name}_snapshot.png`;
@@ -521,7 +449,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
       {/* Header */}
       <div className={`h-[60px] border-b border-[#e7e7e7] bg-[#f5f5f5] flex items-center justify-between px-4 md:px-6 flex-shrink-0 select-none ${isReadOnly ? 'bg-orange-50' : ''}`}>
         <div className="flex items-center gap-2">
-           {/* Mobile Back Button */}
            {onBack && (
                <button 
                   onClick={onBack}
@@ -594,11 +521,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                      </div>
                      <div className="flex items-center gap-3">
                          <div className="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs flex-shrink-0">2</div>
-                         <span className="text-gray-600">添加参与讨论的 <span className="font-bold text-gray-800">AI 角色</span></span>
+                         <span className="text-gray-600">在【成员管理】中勾选参与讨论的 <span className="font-bold text-gray-800">AI 角色</span></span>
                      </div>
                      <div className="flex items-center gap-3">
                          <div className="w-6 h-6 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-xs flex-shrink-0">3</div>
-                         <span className="text-gray-600">配置 <span className="font-bold text-gray-800">发言顺序</span> (如随机或自动讨论)</span>
+                         <span className="text-gray-600">配置 <span className="font-bold text-gray-800">发言顺序</span> (支持随机或自动讨论)</span>
                      </div>
                 </div>
                 
@@ -643,7 +570,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
              此为收藏内容，仅供查阅
           </div>
       ) : isSelectionMode ? (
-          /* Selection Mode Footer */
           <div className="h-[60px] bg-white border-t border-[#e7e7e7] flex items-center justify-between px-4 md:px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] z-10">
               <span className="text-sm text-gray-600">
                   已选择 {selectedMsgIds.size} 条
@@ -669,7 +595,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
               </div>
           </div>
       ) : (
-          /* Normal Input Area */
           <div className="h-[140px] md:h-[180px] bg-[#f5f5f5] border-t border-[#e7e7e7] flex flex-col flex-shrink-0">
             {/* Toolbar */}
             <div className="h-[40px] px-2 md:px-4 flex items-center justify-between text-gray-600">
@@ -748,7 +673,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
                                     导出为图片 (.png)
                                 </button>
                                 
-                                {/* Favorites Actions */}
                                 <button 
                                     onClick={() => {
                                         setShowExportMenu(false);
@@ -786,7 +710,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
             )}
             </div>
 
-            {/* Text Input */}
             <textarea
             ref={textareaRef}
             className="flex-1 w-full bg-[#f5f5f5] resize-none px-4 py-1 text-[16px] md:text-[14px] text-gray-800 focus:outline-none placeholder-gray-400 custom-scrollbar font-normal"
@@ -796,7 +719,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
             onKeyDown={handleKeyDown}
             />
 
-            {/* Footer/Send Button */}
             <div className="h-[40px] px-4 md:px-6 flex items-center justify-end pb-2">
             <button 
                 onClick={handleSendMessage}
@@ -813,7 +735,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
           </div>
       )}
       
-      {/* Modals */}
       <ChatSettingsModal 
         isOpen={isChatSettingsOpen}
         onClose={() => setIsChatSettingsOpen(false)}
@@ -821,8 +742,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chat, settings, allPersonas, on
         allPersonas={allPersonas}
         onUpdateChat={onUpdateChat}
         onDeleteChat={onDeleteChat ? () => onDeleteChat(chat.id) : undefined}
-        messages={messages} // Pass full history
-        settings={settings} // Pass settings for API
+        messages={messages} 
+        settings={settings} 
         onClearHistory={handleClearHistory}
       />
     </div>
