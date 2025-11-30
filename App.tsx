@@ -135,6 +135,34 @@ const App: React.FC = () => {
       localStorage.setItem('app_admin_creds', JSON.stringify(adminCredentials));
   }, [adminCredentials]);
 
+  // Safety Effect: Ensure mobile chat view closes if the selected item is deleted or invalid
+  useEffect(() => {
+     if (isMobileChatOpen) {
+         if (activeSidebarTab === 'chats') {
+             if (selectedChatId && !chats.find(c => c.id === selectedChatId)) {
+                 setIsMobileChatOpen(false);
+                 setSelectedChatId('');
+             } else if (!selectedChatId) {
+                 setIsMobileChatOpen(false);
+             }
+         } else if (activeSidebarTab === 'favorites') {
+             if (selectedFavoriteId && !favorites.find(f => f.id === selectedFavoriteId)) {
+                 setIsMobileChatOpen(false);
+                 setSelectedFavoriteId(null);
+             } else if (!selectedFavoriteId) {
+                 setIsMobileChatOpen(false);
+             }
+         } else if (activeSidebarTab === 'changelog') {
+             if (selectedLogId && !changelogs.find(l => l.id === selectedLogId)) {
+                 setIsMobileChatOpen(false);
+                 setSelectedLogId(null);
+             } else if (!selectedLogId) {
+                 setIsMobileChatOpen(false);
+             }
+         }
+     }
+  }, [chats, favorites, changelogs, selectedChatId, selectedFavoriteId, selectedLogId, isMobileChatOpen, activeSidebarTab]);
+
   // --- Auto Sync Logic (Global Config) ---
   useEffect(() => {
       const performAutoSync = async () => {
@@ -503,7 +531,7 @@ const App: React.FC = () => {
     // 2. Remove messages from storage
     localStorage.removeItem(`chat_msgs_${chatId}`);
 
-    // 3. Update selection if needed
+    // 3. Update selection if needed (and Close Mobile View)
     if (selectedChatId === chatId) {
         setSelectedChatId('');
         setIsMobileChatOpen(false);
@@ -683,7 +711,10 @@ const App: React.FC = () => {
       e.stopPropagation();
       if(window.confirm("确定删除此收藏吗？")) {
           setFavorites(prev => prev.filter(f => f.id !== id));
-          if (selectedFavoriteId === id) setSelectedFavoriteId(null);
+          if (selectedFavoriteId === id) {
+              setSelectedFavoriteId(null);
+              setIsMobileChatOpen(false);
+          }
       }
   };
 
@@ -706,7 +737,10 @@ const App: React.FC = () => {
 
   const handleDeleteLog = (id: string) => {
       setChangelogs(prev => prev.filter(l => l.id !== id));
-      if (selectedLogId === id) setSelectedLogId(null);
+      if (selectedLogId === id) {
+          setSelectedLogId(null);
+          setIsMobileChatOpen(false);
+      }
   };
 
   const handleLogout = () => {
@@ -848,7 +882,7 @@ const App: React.FC = () => {
                     </div>
                  </>
              ) : (
-                <div className="hidden md:flex flex-1 items-center justify-center bg-[#f5f5f5] text-gray-400">
+                <div className={`${isMobileChatOpen ? 'flex' : 'hidden'} md:flex flex-1 items-center justify-center bg-[#f5f5f5] text-gray-400`}>
                     <div className="text-center">
                         <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
                         <p>请选择左侧日志查看详情</p>
@@ -867,7 +901,7 @@ const App: React.FC = () => {
                 onBack={() => setIsMobileChatOpen(false)}
              />
          ) : (
-             <div className="hidden md:flex flex-1 items-center justify-center bg-[#f5f5f5] text-gray-400">
+             <div className={`${isMobileChatOpen ? 'flex' : 'hidden'} md:flex flex-1 items-center justify-center bg-[#f5f5f5] text-gray-400`}>
                <div className="text-center">
                  <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
                  <p>
