@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -8,17 +6,19 @@ import FavoritesList from './components/FavoritesList';
 import ChangelogList from './components/ChangelogList';
 import ChatWindow from './components/ChatWindow';
 import ChangelogView from './components/ChangelogView';
+import MomentsView from './components/MomentsView';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
 import AuthModal from './components/AuthModal';
 import { DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
-import { AppSettings, Persona, ChatGroup, Favorite, Message, ChangelogEntry, UserProfile } from './types';
+import { AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile, Message } from './types';
 import { downloadGlobalConfig, downloadUserData, uploadUserData, uploadGlobalConfig } from './services/ossService';
 import { sendBarkNotification } from './services/notificationService';
 
-const INITIAL_ABOUT_CONTENT = `AI Round Table v1.5.0
+const INITIAL_ABOUT_CONTENT = `AI Round Table v1.6.0
 
 主要功能：
+- 朋友圈 (Moments) 新增
 - 多模型混合协作 (Gemini, DeepSeek, OpenAI)
 - 角色扮演与群聊模拟
 - 收藏夹与导出功能
@@ -101,7 +101,7 @@ const App: React.FC = () => {
   const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [aboutContent, setAboutContent] = useState(INITIAL_ABOUT_CONTENT);
-  const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog'>('chats');
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'chats' | 'contacts' | 'favorites' | 'changelog' | 'moments'>('chats');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncStatus, setSyncStatus] = useState<string>(''); // For AuthModal feedback
   const [ossConnectStatus, setOssConnectStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
@@ -799,7 +799,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-full w-full bg-white select-none relative">
        {/* Sidebar */}
-       <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} flex-shrink-0 z-20 h-full`}>
+       <div className={`${isMobileChatOpen || activeSidebarTab === 'moments' ? 'hidden md:flex' : 'flex'} flex-shrink-0 z-20 h-full`}>
            <Sidebar 
               userAvatar={settings.userAvatar}
               onOpenSettings={() => setIsSettingsOpen(true)}
@@ -809,59 +809,73 @@ const App: React.FC = () => {
            />
        </div>
        
-       {/* List Pane */}
-       <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} flex-1 md:flex-none h-full overflow-hidden`}>
-           {activeSidebarTab === 'chats' && (
-               <ChatList 
-                 chats={filteredChats}
-                 selectedChatId={selectedChatId} 
-                 onSelectChat={handleSelectChat} 
-                 onDeleteChat={handleDeleteChat}
-                 searchQuery={searchQuery}
-                 onSearchChange={setSearchQuery}
-                 onAddChat={handleAddChat}
-               />
-           )}
+       {/* List Pane - Hidden if Moments is active */}
+       {activeSidebarTab !== 'moments' && (
+           <div className={`${isMobileChatOpen ? 'hidden md:flex' : 'flex'} flex-1 md:flex-none h-full overflow-hidden`}>
+               {activeSidebarTab === 'chats' && (
+                   <ChatList 
+                     chats={filteredChats}
+                     selectedChatId={selectedChatId} 
+                     onSelectChat={handleSelectChat} 
+                     onDeleteChat={handleDeleteChat}
+                     searchQuery={searchQuery}
+                     onSearchChange={setSearchQuery}
+                     onAddChat={handleAddChat}
+                   />
+               )}
 
-           {activeSidebarTab === 'contacts' && (
-               <ContactList 
-                 personas={personas}
-                 onSelectContact={handleSelectContact}
-                 searchQuery={searchQuery}
-                 onSearchChange={setSearchQuery}
-               />
-           )}
-           
-           {activeSidebarTab === 'favorites' && (
-               <FavoritesList
-                  favorites={favorites}
-                  onSelectFavorite={handleSelectFavorite}
-                  selectedFavoriteId={selectedFavoriteId}
-                  onDeleteFavorite={handleDeleteFavorite}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-               />
-           )}
+               {activeSidebarTab === 'contacts' && (
+                   <ContactList 
+                     personas={personas}
+                     onSelectContact={handleSelectContact}
+                     searchQuery={searchQuery}
+                     onSearchChange={setSearchQuery}
+                   />
+               )}
+               
+               {activeSidebarTab === 'favorites' && (
+                   <FavoritesList
+                      favorites={favorites}
+                      onSelectFavorite={handleSelectFavorite}
+                      selectedFavoriteId={selectedFavoriteId}
+                      onDeleteFavorite={handleDeleteFavorite}
+                      searchQuery={searchQuery}
+                      onSearchChange={setSearchQuery}
+                   />
+               )}
 
-           {activeSidebarTab === 'changelog' && (
-               <ChangelogList 
-                  logs={changelogs}
-                  selectedLogId={selectedLogId}
-                  onSelectLog={handleSelectLog}
-                  onAddLog={handleAddLog}
-                  searchQuery={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  isAuthenticated={isAuthenticated}
-               />
-           )}
-       </div>
+               {activeSidebarTab === 'changelog' && (
+                   <ChangelogList 
+                      logs={changelogs}
+                      selectedLogId={selectedLogId}
+                      onSelectLog={handleSelectLog}
+                      onAddLog={handleAddLog}
+                      searchQuery={searchQuery}
+                      onSearchChange={setSearchQuery}
+                      isAuthenticated={isAuthenticated}
+                   />
+               )}
+           </div>
+       )}
 
        {/* Chat Window / Content */}
        <div className={`
-          ${isMobileChatOpen ? 'flex fixed inset-0 z-30 bg-white' : 'hidden'} 
+          ${isMobileChatOpen || activeSidebarTab === 'moments' ? 'flex fixed inset-0 z-30 bg-white' : 'hidden'} 
           md:flex md:static md:flex-1 h-full w-full
        `}>
-         {activeSidebarTab === 'changelog' ? (
+         {activeSidebarTab === 'moments' ? (
+             <div className="flex-1 h-full relative flex flex-col">
+                 <div className="md:hidden absolute top-4 left-4 z-50">
+                     <button 
+                        onClick={() => setActiveSidebarTab('chats')} 
+                        className="p-1.5 -ml-1 text-white hover:text-gray-200 drop-shadow-md"
+                     >
+                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                     </button>
+                 </div>
+                 <MomentsView currentUser={currentUser} />
+            </div>
+         ) : activeSidebarTab === 'changelog' ? (
              activeLog ? (
                  <>
                     <div className="flex-1 h-full relative flex flex-col">

@@ -368,3 +368,158 @@ export const generateRandomPersonaDetails = async (
       };
   }
 };
+
+/**
+ * Generates likes and comments for a Moment post.
+ */
+export const generateMomentInteractions = async (
+  postContent: string,
+  likeCount: number,
+  commentCount: number,
+  settings: AppSettings
+): Promise<{ likes: string[]; comments: { name: string; content: string }[] }> => {
+  if (likeCount <= 0 && commentCount <= 0) {
+      return { likes: [], comments: [] };
+  }
+
+  const providerId = settings.activeProvider;
+  const config = settings.providerConfigs[providerId];
+  const modelId = config.selectedModel;
+
+  const prompt = `
+    You are generating fake social media interactions for a post in a Chinese social network context (like WeChat Moments).
+    
+    **Post Content:** "${postContent}"
+    
+    **Task:**
+    1. Generate ${likeCount} distinct, realistic Chinese user names (or English nicknames common in China) for "Likes".
+    2. Generate ${commentCount} distinct comments from different fictional users.
+       - Each comment must be relevant to the post content.
+       - Comment length: strictly 10-20 Chinese characters.
+       - Tone: Casual, enthusiastic, supportive, or curious (WeChat Moments style).
+       - User names for comments must be distinct from each other.
+    
+    **Output Format:**
+    Return ONLY a valid JSON object with this structure:
+    {
+      "likes": ["Name1", "Name2", ...],
+      "comments": [
+        { "name": "CommenterName1", "content": "Comment content here..." },
+        { "name": "CommenterName2", "content": "Another comment..." }
+      ]
+    }
+    Do not include markdown code blocks. Just the raw JSON.
+  `;
+
+  try {
+      let jsonStr = "";
+      if (providerId === 'gemini') {
+          const apiKey = config.apiKey || process.env.API_KEY || '';
+          if (!apiKey) throw new Error("Missing API Key");
+          const ai = new GoogleGenAI({ apiKey });
+          
+          const response = await ai.models.generateContent({
+            model: modelId,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+          });
+          jsonStr = response.text || "{}";
+      } else {
+          const messages = [{ role: 'user', content: prompt }];
+          jsonStr = await callOpenAICompatibleAPI(null, messages, config, modelId);
+      }
+      
+      const cleanJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+      const result = JSON.parse(cleanJson);
+      return {
+          likes: result.likes || [],
+          comments: result.comments || []
+      };
+  } catch (e) {
+      console.error("Generate moment interactions failed", e);
+      return { likes: [], comments: [] };
+  }
+};
+
+/**
+ * Generates a complete moment post (User, Avatar, Content, Images, Likes, Comments)
+ */
+export const generateMomentPost = async (
+  topic: string,
+  imageCount: number,
+  likeCount: number,
+  commentCount: number,
+  settings: AppSettings
+): Promise<{ 
+  userName: string; 
+  avatarPrompt: string; 
+  content: string; 
+  imagePrompts: string[];
+  likes: string[];
+  comments: { name: string; content: string }[];
+}> => {
+  const providerId = settings.activeProvider;
+  const config = settings.providerConfigs[providerId];
+  const modelId = config.selectedModel;
+
+  const prompt = `
+    Generate a fake social media post (WeChat Moments style) in Chinese.
+    
+    Topic: ${topic || 'random lifestyle (travel, food, work, thoughts, emotion, etc.)'}
+    
+    Requirements:
+    1. "userName": A realistic Chinese nickname (creative, not generic).
+    2. "avatarPrompt": A short English visual description for the user's avatar.
+    3. "content": The post text in Chinese (casual, natural, emojis allowed).
+    4. "imagePrompts": An array of English visual descriptions for images. 
+       - Generate exactly ${imageCount} image descriptions.
+       ${imageCount === 0 ? '- Return an empty array for imagePrompts.' : '- Each description should be detailed enough to generate a photo.'}
+    5. "likes": An array of ${likeCount} distinct Chinese names (or English nicknames) who liked the post.
+    6. "comments": An array of ${commentCount} objects, each with "name" and "content".
+       - Content must be 10-20 Chinese characters.
+       - Relevant to the generated "content".
+       - Casual tone.
+    
+    Return ONLY valid JSON. Do not use markdown code blocks.
+    {
+      "userName": "...",
+      "avatarPrompt": "...",
+      "content": "...",
+      "imagePrompts": ["...", "..."],
+      "likes": ["...", "..."],
+      "comments": [{ "name": "...", "content": "..." }, ...]
+    }
+  `;
+
+  try {
+      let jsonStr = "";
+      if (providerId === 'gemini') {
+          const apiKey = config.apiKey || process.env.API_KEY || '';
+          if (!apiKey) throw new Error("Missing API Key");
+          const ai = new GoogleGenAI({ apiKey });
+          
+          const response = await ai.models.generateContent({
+            model: modelId,
+            contents: prompt,
+            config: { responseMimeType: "application/json" }
+          });
+          jsonStr = response.text || "{}";
+      } else {
+          const messages = [{ role: 'user', content: prompt }];
+          jsonStr = await callOpenAICompatibleAPI(null, messages, config, modelId);
+      }
+      
+      const cleanJson = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+      return JSON.parse(cleanJson);
+  } catch (e) {
+      console.error("Generate moment post failed", e);
+      return {
+          userName: "AI Assistant",
+          avatarPrompt: "robot",
+          content: "生成失败，请重试。",
+          imagePrompts: [],
+          likes: [],
+          comments: []
+      };
+  }
+};
