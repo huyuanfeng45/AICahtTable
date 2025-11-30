@@ -142,3 +142,28 @@ export interface UserProfile {
   lastIp?: string; // Recorded IP
   isBanned?: boolean; // Explicit ban status
 }
+
+export interface MomentLike {
+  name: string;
+  avatar: string;
+}
+
+export interface MomentComment {
+  name: string;
+  content: string;
+  avatar?: string;
+  time?: string;
+}
+
+export interface MomentPost {
+  id: number;
+  user: {
+      name: string;
+      avatar: string;
+  };
+  content: string;
+  images: string[];
+  time: string;
+  likes: MomentLike[];
+  comments: MomentComment[];
+}

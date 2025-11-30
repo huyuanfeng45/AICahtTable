@@ -1,6 +1,6 @@
 
 
-import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile, Message } from '../types';
+import { OssConfig, AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile, Message, MomentPost } from '../types';
 
 // Declare global OSS if not typed
 declare global {
@@ -24,6 +24,7 @@ export interface UserCloudData {
   chats: ChatGroup[];
   favorites: Favorite[];
   changelogs: ChangelogEntry[];
+  moments?: MomentPost[];
   // Store chat histories: Key = chatId, Value = Array of Messages
   chatHistories?: Record<string, Message[]>;
 }
@@ -173,6 +174,7 @@ export const uploadUserData = async (
     chats: ChatGroup[], 
     favorites: Favorite[], 
     changelogs: ChangelogEntry[],
+    moments: MomentPost[],
     chatHistories?: Record<string, Message[]>
   }
 ): Promise<void> => {

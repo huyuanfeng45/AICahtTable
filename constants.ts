@@ -1,6 +1,4 @@
-
-
-import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry, AppSettings } from './types';
+import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry, AppSettings, MomentPost } from './types';
 
 export const USER_ID = 'user-me';
 
@@ -112,6 +110,8 @@ export const MOCK_CHANGELOGS: ChangelogEntry[] = [
     content: '- 基础聊天功能\n- 支持 Gemini 2.5 Flash\n- 角色扮演系统上线'
   }
 ];
+
+export const MOCK_MOMENTS: MomentPost[] = [];
 
 export const GEMINI_MODELS: {id: GeminiModelId; name: string; desc: string}[] = [
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: '速度快，响应即时，适合日常对话' },

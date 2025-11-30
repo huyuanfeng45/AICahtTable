@@ -1,38 +1,17 @@
+
+
 import React, { useState, useRef, useEffect } from 'react';
-import { UserProfile, AppSettings } from '../types';
+import { UserProfile, AppSettings, MomentPost, MomentLike, MomentComment } from '../types';
 import { generateMomentInteractions, generateMomentPost } from '../services/geminiService';
 import { DEFAULT_APP_SETTINGS } from '../constants';
 
 interface MomentsViewProps {
   currentUser: UserProfile | null;
+  posts: MomentPost[];
+  onUpdatePosts: (posts: MomentPost[]) => void;
 }
 
-interface Comment {
-    name: string;
-    content: string;
-    avatar?: string; // Added avatar for detail view
-    time?: string;   // Added time for detail view
-}
-
-interface Like {
-    name: string;
-    avatar: string; 
-}
-
-interface Post {
-    id: number;
-    user: {
-        name: string;
-        avatar: string;
-    };
-    content: string;
-    images: string[];
-    time: string;
-    likes: Like[];
-    comments: Comment[];
-}
-
-const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
+const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdatePosts }) => {
   const [isPosting, setIsPosting] = useState(false);
   const [postText, setPostText] = useState('');
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
@@ -58,7 +37,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
 
   // Navigation State
   const [viewingUser, setViewingUser] = useState<{name: string, avatar: string} | null>(null);
-  const [viewingPost, setViewingPost] = useState<Post | null>(null);
+  const [viewingPost, setViewingPost] = useState<MomentPost | null>(null);
 
   // Load settings for API calls
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
@@ -71,41 +50,6 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
           } catch(e) {}
       }
   }, []);
-
-  const [posts, setPosts] = useState<Post[]>([
-    {
-      id: 1,
-      user: {
-        name: '周频家长 仙岩 自锁',
-        avatar: 'https://picsum.photos/seed/lady/100/100', 
-      },
-      content: '19欧/条🇮🇹🉐...',
-      images: [
-        'https://picsum.photos/seed/meat1/300/300',
-        'https://picsum.photos/seed/meat2/300/300',
-        'https://picsum.photos/seed/meat3/300/300',
-        'https://picsum.photos/seed/meat4/300/300',
-      ],
-      time: '2分钟前',
-      likes: [],
-      comments: []
-    },
-    {
-      id: 2,
-      user: {
-        name: '陈琪乐',
-        avatar: 'https://picsum.photos/seed/frog/100/100', 
-      },
-      content: '🧃',
-      images: [
-        'https://picsum.photos/seed/food1/300/300',
-        'https://picsum.photos/seed/food2/300/300',
-      ],
-      time: '2分钟前',
-      likes: [],
-      comments: []
-    }
-  ]);
 
   const handlePostMoment = () => {
       setIsPosting(true);
@@ -123,7 +67,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
       if (!postText.trim() && selectedImages.length === 0) return;
       
       const newPostId = Date.now();
-      const newPost: Post = {
+      const newPost: MomentPost = {
           id: newPostId,
           user: {
               name: currentUser?.name || '我',
@@ -137,7 +81,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
       };
       
       // Optimistic update
-      setPosts([newPost, ...posts]);
+      onUpdatePosts([newPost, ...posts]);
       
       // Close UI
       setIsPosting(false);
@@ -155,29 +99,27 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
               );
               
               // Map likes to include avatars (Use picsum for photo-like avatars)
-              const enrichedLikes: Like[] = interactions.likes.map(name => ({
+              const enrichedLikes: MomentLike[] = interactions.likes.map(name => ({
                   name,
                   avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200/200`
               }));
               
               // Map comments to include avatars and time
-              const enrichedComments: Comment[] = interactions.comments.map(c => ({
+              const enrichedComments: MomentComment[] = interactions.comments.map(c => ({
                   ...c,
                   avatar: `https://picsum.photos/seed/${encodeURIComponent(c.name)}/200/200`,
                   time: '刚刚'
               }));
 
               // Update the post with generated data
-              setPosts(prevPosts => prevPosts.map(p => {
-                  if (p.id === newPostId) {
-                      return {
-                          ...p,
-                          likes: enrichedLikes,
-                          comments: enrichedComments
-                      };
-                  }
-                  return p;
-              }));
+              onUpdatePosts([
+                  {
+                      ...newPost,
+                      likes: enrichedLikes,
+                      comments: enrichedComments
+                  },
+                  ...posts
+              ]);
           } catch (e) {
               console.error("Failed to generate AI interactions", e);
           }
@@ -205,19 +147,19 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
         ) : [];
 
         // Enrich Likes with avatars (Use picsum for realistic look)
-        const enrichedLikes: Like[] = result.likes ? result.likes.map(name => ({
+        const enrichedLikes: MomentLike[] = result.likes ? result.likes.map(name => ({
             name,
             avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200/200`
         })) : [];
         
         // Enrich Comments
-        const enrichedComments: Comment[] = result.comments ? result.comments.map(c => ({
+        const enrichedComments: MomentComment[] = result.comments ? result.comments.map(c => ({
             ...c,
             avatar: `https://picsum.photos/seed/${encodeURIComponent(c.name)}/200/200`,
             time: '刚刚'
         })) : [];
 
-        const newPost: Post = {
+        const newPost: MomentPost = {
             id: Date.now(),
             user: {
                 name: result.userName,
@@ -230,7 +172,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
             comments: enrichedComments
         };
 
-        setPosts([newPost, ...posts]);
+        onUpdatePosts([newPost, ...posts]);
         setShowAiPostModal(false);
         setAiPostTopic('');
         setAiTimeValue(0);
@@ -269,7 +211,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser }) => {
   
   const handleDeletePost = (postId: number) => {
       if (window.confirm('确定删除这条朋友圈吗？')) {
-          setPosts(prev => prev.filter(p => p.id !== postId));
+          onUpdatePosts(posts.filter(p => p.id !== postId));
           if (viewingPost?.id === postId) {
               setViewingPost(null);
           }

@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -10,8 +12,8 @@ import MomentsView from './components/MomentsView';
 import SettingsModal from './components/SettingsModal';
 import AboutModal from './components/AboutModal';
 import AuthModal from './components/AuthModal';
-import { DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS } from './constants';
-import { AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile, Message } from './types';
+import { DEFAULT_PROVIDER_CONFIGS, AI_PERSONAS, MOCK_CHANGELOGS, DEFAULT_APP_SETTINGS, MOCK_MOMENTS } from './constants';
+import { AppSettings, Persona, ChatGroup, Favorite, ChangelogEntry, UserProfile, Message, MomentPost } from './types';
 import { downloadGlobalConfig, downloadUserData, uploadUserData, uploadGlobalConfig } from './services/ossService';
 import { sendBarkNotification } from './services/notificationService';
 
@@ -51,6 +53,7 @@ const App: React.FC = () => {
   const [chats, setChats] = useState<ChatGroup[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [changelogs, setChangelogs] = useState<ChangelogEntry[]>([]);
+  const [moments, setMoments] = useState<MomentPost[]>([]);
   
   // App Settings - Loaded per user (preference) or global default
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -246,6 +249,7 @@ const App: React.FC = () => {
           setChats(loadState(`app_chats_${currentUser.id}`, [])); // Initialize with empty array, NOT mocks
           setFavorites(loadState(`app_favorites_${currentUser.id}`, []));
           setChangelogs(loadState(`app_changelogs_${currentUser.id}`, MOCK_CHANGELOGS));
+          setMoments(loadState(`app_moments_${currentUser.id}`, MOCK_MOMENTS));
           
           // 2. Load Settings
           const savedUserSettings = loadState<AppSettings | null>(`app_settings_${currentUser.id}`, null);
@@ -292,6 +296,7 @@ const App: React.FC = () => {
                       if(cloudData.chats) setChats(cloudData.chats);
                       if(cloudData.favorites) setFavorites(cloudData.favorites);
                       if(cloudData.changelogs) setChangelogs(cloudData.changelogs);
+                      if(cloudData.moments) setMoments(cloudData.moments);
                       setSyncStatus('数据已同步');
                   } else {
                       setSyncStatus('');
@@ -341,6 +346,7 @@ const App: React.FC = () => {
                 chats,
                 favorites,
                 changelogs,
+                moments,
                 chatHistories
             }).then(() => {
                 // setSyncStatus('已保存到云端');
@@ -354,7 +360,7 @@ const App: React.FC = () => {
     return () => {
         if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [chats, favorites, changelogs, currentUser, settings.ossConfig]);
+  }, [chats, favorites, changelogs, moments, currentUser, settings.ossConfig]);
 
 
   // Persist Users List
@@ -375,6 +381,10 @@ const App: React.FC = () => {
   useEffect(() => { 
       if(currentUser) localStorage.setItem(`app_changelogs_${currentUser.id}`, JSON.stringify(changelogs)); 
   }, [changelogs, currentUser]);
+  
+  useEffect(() => { 
+      if(currentUser) localStorage.setItem(`app_moments_${currentUser.id}`, JSON.stringify(moments)); 
+  }, [moments, currentUser]);
   
   useEffect(() => { 
       if(currentUser) localStorage.setItem(`app_settings_${currentUser.id}`, JSON.stringify(settings)); 
@@ -509,6 +519,7 @@ const App: React.FC = () => {
       localStorage.removeItem(`app_chats_${id}`);
       localStorage.removeItem(`app_favorites_${id}`);
       localStorage.removeItem(`app_changelogs_${id}`);
+      localStorage.removeItem(`app_moments_${id}`);
       localStorage.removeItem(`app_settings_${id}`);
       
       if (currentUser?.id === id) {
@@ -873,7 +884,11 @@ const App: React.FC = () => {
                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
                      </button>
                  </div>
-                 <MomentsView currentUser={currentUser} />
+                 <MomentsView 
+                    currentUser={currentUser} 
+                    posts={moments}
+                    onUpdatePosts={setMoments}
+                 />
             </div>
          ) : activeSidebarTab === 'changelog' ? (
              activeLog ? (
