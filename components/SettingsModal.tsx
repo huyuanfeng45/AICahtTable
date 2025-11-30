@@ -1,8 +1,6 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
-import { GEMINI_MODELS, MODEL_PROVIDERS } from '../constants';
+import { MODEL_PROVIDERS } from '../constants';
 import { generateRandomPersonaDetails } from '../services/geminiService';
 import { uploadGlobalConfig, downloadGlobalConfig } from '../services/ossService';
 import { sendBarkNotification } from '../services/notificationService';
@@ -151,13 +149,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         if (localOssConfig.enabled) {
             setIsSaving(true);
             try {
-                // Upload current state to cloud, including all users for Admin
-                // CRITICAL FIX: Pass newAdminCreds instead of old adminCredentials state
+                // Upload current state to cloud
                 await uploadGlobalConfig(newSettings, localPersonas, allUsers || [], newAdminCreds, localUserName);
                 console.log('Auto-uploaded config to OSS');
             } catch (e) {
                 console.error('Auto upload failed', e);
-                // Alert user but don't prevent close, as local save succeeded
                 alert(`设置已保存，但自动同步到云端失败：${e instanceof Error ? e.message : String(e)}`);
             } finally {
                 setIsSaving(false);
@@ -202,7 +198,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setIsSyncing(true);
       setSyncStatus('正在上传配置到云端...');
       try {
-          // Construct temp settings object for upload
           const tempSettings: AppSettings = {
               ...settings,
               providerConfigs: localProviderConfigs,
@@ -214,9 +209,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               userAvatar: localAvatar,
               userName: localUserName
           };
-          // CRITICAL FIX: Use current local edits for admin auth
           const tempAdminCreds = { username: localAdminUsername, password: localAdminPassword };
-          // Include users in manual sync
           await uploadGlobalConfig(tempSettings, localPersonas, allUsers || [], tempAdminCreds, settings.userName);
           setSyncStatus(`上传成功! (${new Date().toLocaleTimeString()})`);
       } catch (e) {
@@ -231,12 +224,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setIsSyncing(true);
       setSyncStatus('正在从云端拉取配置...');
       try {
-          // Use local config for connection
           const tempSettings: AppSettings = { ...settings, ossConfig: localOssConfig };
           const data = await downloadGlobalConfig(tempSettings);
           
           if (data) {
-              // Apply downloaded settings
               if (data.appSettings.providerConfigs) setLocalProviderConfigs(data.appSettings.providerConfigs as any);
               if (data.appSettings.activeProvider) setLocalActiveProvider(data.appSettings.activeProvider as any);
               if (data.appSettings.geminiModel) setLocalGeminiModel(data.appSettings.geminiModel as any);
@@ -248,12 +239,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               
               if (data.personas) setLocalPersonas(data.personas);
               
-              // Apply downloaded users if exists
               if (data.users && onUpdateAllUsers) {
                   onUpdateAllUsers(data.users);
               }
 
-              // Update admin creds if present in cloud
               if (data.adminAuth) {
                   setLocalAdminUsername(data.adminAuth.username);
                   setLocalAdminPassword(data.adminAuth.password);
@@ -332,8 +321,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       await sendBarkNotification("Bark 测试", "这是一条测试消息。如果您收到此消息，说明配置成功。", localNotificationConfig);
   };
 
-
-  // --- Character Logic ---
   const handleAddPersona = () => {
     const newId = `custom_${Date.now()}`;
     const newPersona: Persona = {
@@ -383,22 +370,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsGeneratingPersona(true);
     try {
         const details = await generateRandomPersonaDetails(settings);
-        
-        // Random Provider/Model from constants (assuming all keys available, otherwise use defaults)
         const randomProvider = MODEL_PROVIDERS[Math.floor(Math.random() * MODEL_PROVIDERS.length)];
         const randomModel = randomProvider.models[Math.floor(Math.random() * randomProvider.models.length)];
         
-        // Avatar
         const encodedPrompt = encodeURIComponent(details.avatarPrompt);
         const avatarUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=200&height=200&nologo=true`;
 
-        // Update current editing persona
         setLocalPersonas(prev => prev.map(p => {
             if (p.id === editingPersonaId) {
                 return {
                     ...p,
                     name: details.name,
-                    role: randomModel.name, // Use Model Name as Role
+                    role: randomModel.name,
                     systemInstruction: details.systemInstruction,
                     avatar: avatarUrl,
                     config: {
@@ -418,7 +401,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  // --- User Logic ---
   const startEditingUser = (user: UserProfile) => {
       setEditingUserId(user.id);
       setEditUserName(user.name);
@@ -430,6 +412,117 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           setEditingUserId(null);
       }
   };
+
+  // --- Render Tabs ---
+
+  const renderProfileTab = () => (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div>
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">个人资料</h3>
+                <button 
+                    onClick={() => {
+                        onClose();
+                        onSwitchUser();
+                    }}
+                    className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors"
+                >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                    切换账号 / Switch Account
+                </button>
+            </div>
+
+            <div className="flex flex-col items-center mb-6">
+              <div className="relative group cursor-pointer">
+                <img 
+                    src={localAvatar} 
+                    alt="Avatar Preview" 
+                    className="w-24 h-24 rounded-full mb-3 object-cover bg-gray-200 border-2 border-white shadow-md" 
+                    onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/error/100/100')}
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">头像链接 (URL)</label>
+                <input 
+                  type="text" 
+                  value={localAvatar}
+                  onChange={(e) => setLocalAvatar(e.target.value)}
+                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                  placeholder="https://..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">用户名 (User Name)</label>
+                <input 
+                  type="text" 
+                  value={localUserName}
+                  onChange={(e) => setLocalUserName(e.target.value)}
+                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                  placeholder="User"
+                />
+              </div>
+            </div>
+
+            {isAuthenticated && (
+                <div className="pt-4 border-t border-gray-100 mt-6">
+                   <h4 className="text-sm font-medium text-gray-900 mb-3">管理员账号设置</h4>
+                   <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 space-y-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">账号</label>
+                        <input 
+                            type="text" 
+                            value={localAdminUsername}
+                            onChange={(e) => setLocalAdminUsername(e.target.value)}
+                            className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                        />
+                      </div>
+                       <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">密码</label>
+                        <input 
+                            type="text" 
+                            value={localAdminPassword}
+                            onChange={(e) => setLocalAdminPassword(e.target.value)}
+                            className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
+                        />
+                      </div>
+                      <div className="text-[10px] text-orange-600 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                          修改此处将更新登录后台所需的凭证
+                      </div>
+                   </div>
+                </div>
+            )}
+            
+            {isAuthenticated && (
+                <div className="pt-4 border-t border-gray-100 mt-6">
+                   <h4 className="text-sm font-medium text-gray-900 mb-2">部署配置</h4>
+                   <p className="text-xs text-gray-500 mb-3">将当前的个人设置、API 配置和模型选择导出为系统默认值。部署后，所有新用户将默认使用此配置。</p>
+                   <button 
+                      onClick={handleExportDefaults}
+                      className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
+                   >
+                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                       导出为系统默认配置 (Export Defaults)
+                   </button>
+                </div>
+            )}
+            
+            {isAuthenticated && (
+                <div className="pt-2">
+                     <button 
+                        onClick={onLogout}
+                        className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                     >
+                        退出管理员登录
+                     </button>
+                </div>
+            )}
+        </div>
+    </div>
+  );
 
   const renderUsersTab = () => (
       <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
@@ -531,23 +624,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <h3 className="text-lg font-medium text-gray-900">通知推送 (Notifications)</h3>
                 <p className="text-xs text-gray-500">配置 Bark 用于接收新用户注册提醒。</p>
             </div>
-            <div className="bg-orange-100 text-orange-700 px-3 py-1 rounded text-xs font-medium border border-orange-200">
-                Bark App required
-            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto custom-scrollbar p-1">
               <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-6">
-                  <div className="flex items-start gap-4">
-                      <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">
-                          🔔
-                      </div>
-                      <div className="flex-1">
-                          <h4 className="font-medium text-gray-900">Bark Push</h4>
-                          <p className="text-xs text-gray-500 mt-1">Bark 是一个 iOS 端的自定义推送服务。开启后，每当有新用户注册时，您的手机将收到推送通知。</p>
-                      </div>
-                  </div>
-
                   <div className="space-y-4">
                        <div className="flex items-center">
                           <input 
@@ -572,7 +652,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 onChange={(e) => setLocalNotificationConfig({...localNotificationConfig, serverUrl: e.target.value})}
                                 className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                             />
-                            <p className="text-[10px] text-gray-400 mt-1">默认为官方服务器 https://api.day.app，也可使用自建服务器。</p>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-gray-600 mb-1">Device Key</label>
@@ -602,7 +681,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   );
   
   const renderCloudTab = () => {
-    // Check if using Env Vars
     const hasEnvRegion = !!process.env.OSS_REGION;
     const hasEnvAccessKey = !!process.env.OSS_ACCESS_KEY_ID;
     const isEnvManaged = hasEnvRegion && hasEnvAccessKey;
@@ -616,7 +694,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             {isEnvManaged && (
                 <div className="bg-purple-100 text-purple-700 px-3 py-1 rounded text-xs font-medium border border-purple-200 flex items-center gap-1">
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                     Managed by Environment
                 </div>
             )}
@@ -624,14 +701,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           
           <div className="flex-1 overflow-y-auto custom-scrollbar">
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 relative">
-                  {isEnvManaged && (
-                    <div className="absolute top-0 right-0 p-2 opacity-50">
-                       <svg className="w-16 h-16 text-blue-200" fill="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                    </div>
-                  )}
-
                   <h4 className="text-sm font-semibold text-blue-800 mb-2 flex items-center gap-2">
-                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                        OSS 配置
                   </h4>
                   <div className="grid grid-cols-2 gap-4">
@@ -660,7 +730,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       <div className="col-span-2">
                            <label className="block text-xs font-medium text-gray-600 mb-1">AccessKey ID</label>
                           <input 
-                              type="text" // changed from password to text for env display check
+                              type="text" 
                               value={isEnvManaged ? `${localOssConfig.accessKeyId.substring(0, 4)}... (from env)` : localOssConfig.accessKeyId}
                               onChange={(e) => setLocalOssConfig({...localOssConfig, accessKeyId: e.target.value})}
                               className={`w-full border border-blue-200 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none ${isEnvManaged ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
@@ -722,7 +792,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
               
               <div className="space-y-4">
-                  <h4 className="text-sm font-semibold text-gray-800">同步操作</h4>
                   <div className="flex gap-4">
                       {isAuthenticated && (
                           <button 
@@ -730,12 +799,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             disabled={isSyncing || !localOssConfig.enabled}
                             className="flex-1 bg-gray-900 text-white py-2 rounded-lg text-sm hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                           >
-                              {isSyncing ? '...' : (
-                                  <>
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                                    上传配置 (Admin Push)
-                                  </>
-                              )}
+                              {isSyncing ? '...' : '上传配置 (Admin Push)'}
                           </button>
                       )}
                       
@@ -744,12 +808,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         disabled={isSyncing || !localOssConfig.enabled}
                         className="flex-1 border border-gray-300 bg-white text-gray-700 py-2 rounded-lg text-sm hover:bg-gray-50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                           {isSyncing ? '...' : (
-                               <>
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3 3m0 0l-3-3m3 3v12"></path></svg>
-                                拉取配置 (Pull Sync)
-                               </>
-                           )}
+                           {isSyncing ? '...' : '拉取配置 (Pull Sync)'}
                       </button>
                   </div>
                   
@@ -758,134 +817,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           {syncStatus}
                       </div>
                   )}
-                  
-                  <div className="text-xs text-gray-500 mt-2">
-                      <p>注意：</p>
-                      <ul className="list-disc list-inside space-y-1 mt-1 ml-1">
-                          <li>上传操作将覆盖云端的 <code>{localOssConfig.path || 'config.json'}</code> 文件。</li>
-                          <li>拉取操作将覆盖本地的“模型接入”、“角色管理”和“用户列表”配置。</li>
-                          {isEnvManaged && (
-                              <li className="text-purple-600 font-medium">OSS 连接信息正由环境变量管理，普通用户打开应用时将自动拉取。</li>
-                          )}
-                      </ul>
-                  </div>
               </div>
           </div>
       </div>
     );
   };
-
-  const renderProfileTab = () => (
-    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-        <div>
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">个人资料</h3>
-                <button 
-                    onClick={() => {
-                        onClose();
-                        onSwitchUser();
-                    }}
-                    className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded transition-colors"
-                >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
-                    切换账号 / Switch Account
-                </button>
-            </div>
-
-            <div className="flex flex-col items-center mb-6">
-              <div className="relative group cursor-pointer">
-                <img 
-                    src={localAvatar} 
-                    alt="Avatar Preview" 
-                    className="w-24 h-24 rounded-full mb-3 object-cover bg-gray-200 border-2 border-white shadow-md" 
-                    onError={(e) => (e.currentTarget.src = 'https://picsum.photos/seed/error/100/100')}
-                />
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-full transition-all flex items-center justify-center">
-                    <span className="text-white opacity-0 group-hover:opacity-100 text-xs">修改</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">头像链接 (URL)</label>
-                <input 
-                  type="text" 
-                  value={localAvatar}
-                  onChange={(e) => setLocalAvatar(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                  placeholder="https://..."
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">用户名 (User Name)</label>
-                <input 
-                  type="text" 
-                  value={localUserName}
-                  onChange={(e) => setLocalUserName(e.target.value)}
-                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                  placeholder="User"
-                />
-              </div>
-            </div>
-
-            {isAuthenticated && (
-                <div className="pt-4 border-t border-gray-100 mt-6">
-                   <h4 className="text-sm font-medium text-gray-900 mb-3">管理员账号设置</h4>
-                   <div className="bg-orange-50 p-4 rounded-lg border border-orange-100 space-y-4">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">账号</label>
-                        <input 
-                            type="text" 
-                            value={localAdminUsername}
-                            onChange={(e) => setLocalAdminUsername(e.target.value)}
-                            className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                        />
-                      </div>
-                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">密码</label>
-                        <input 
-                            type="text" 
-                            value={localAdminPassword}
-                            onChange={(e) => setLocalAdminPassword(e.target.value)}
-                            className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono"
-                        />
-                      </div>
-                      <div className="text-[10px] text-orange-600 flex items-center gap-1">
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                          修改此处将更新登录后台所需的凭证
-                      </div>
-                   </div>
-                </div>
-            )}
-            
-            {isAuthenticated && (
-                <div className="pt-4 border-t border-gray-100 mt-6">
-                   <h4 className="text-sm font-medium text-gray-900 mb-2">部署配置</h4>
-                   <p className="text-xs text-gray-500 mb-3">将当前的个人设置、API 配置和模型选择导出为系统默认值。部署后，所有新用户将默认使用此配置。</p>
-                   <button 
-                      onClick={handleExportDefaults}
-                      className="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 py-2 rounded text-sm transition-colors flex items-center justify-center gap-2"
-                   >
-                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                       导出为系统默认配置 (Export Defaults)
-                   </button>
-                </div>
-            )}
-            
-            {isAuthenticated && (
-                <div className="pt-2">
-                     <button 
-                        onClick={onLogout}
-                        className="text-xs text-red-500 hover:text-red-700 hover:underline"
-                     >
-                        退出管理员登录
-                     </button>
-                </div>
-            )}
-        </div>
-    </div>
-  );
 
   const renderModelsTab = () => (
     <div className="space-y-6 h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
@@ -896,7 +832,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
            {/* Global Settings */}
            <div className="border border-gray-200 bg-gray-50 rounded-lg p-4">
                <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
                    通用生成参数
                </h4>
                <div className="grid grid-cols-2 gap-4">
@@ -913,13 +848,21 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                        />
                        <p className="text-[10px] text-gray-400 mt-1">控制 AI 单次回复的最大篇幅 (建议 200-500)</p>
                    </div>
+                   <div className="flex items-center pt-5">
+                       <input 
+                            type="checkbox"
+                            checked={localEnableThinking}
+                            onChange={(e) => setLocalEnableThinking(e.target.checked)}
+                            className="mr-2"
+                       />
+                       <span className="text-xs text-gray-700">启用 Thinking (仅 Gemini 2.5 支持)</span>
+                   </div>
                </div>
            </div>
 
            {MODEL_PROVIDERS.map(provider => {
              const isActive = localActiveProvider === provider.id;
              const config = localProviderConfigs[provider.id];
-             const isGemini = provider.id === 'gemini';
              
              const availableModels = config.fetchedModels && config.fetchedModels.length > 0 
                 ? config.fetchedModels 
@@ -960,68 +903,44 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                  <div className={`space-y-3`}>
                     {provider.fields.map(field => (
                         <div key={field.key}>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">{field.label}</label>
-                        <input 
-                            type={field.type}
-                            placeholder={field.placeholder}
-                            value={config[field.key as keyof ProviderConfig] as string || ''}
-                            onChange={(e) => updateProviderConfig(provider.id, field.key as keyof ProviderConfig, e.target.value)}
-                            className="w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-green-500"
-                        />
+                            <label className="block text-xs font-medium text-gray-600 mb-1">{field.label}</label>
+                            <input 
+                                type={field.type}
+                                value={config[field.key] || ''}
+                                onChange={(e) => updateProviderConfig(provider.id, field.key as any, e.target.value)}
+                                className={`w-full text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 ${isActive ? 'focus:ring-green-500' : 'focus:ring-gray-400'}`}
+                                placeholder={field.placeholder}
+                            />
                         </div>
                     ))}
 
-                    <div className="pt-1">
-                        <div className="flex items-end gap-2 mb-1">
-                            <label className="block text-xs font-medium text-gray-600">默认模型</label>
-                            {provider.fields.length > 0 && (
-                                <button 
-                                    onClick={() => handleFetchModels(provider.id)}
-                                    disabled={isFetchingModels[provider.id]}
-                                    className="text-[10px] text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
-                                >
-                                    {isFetchingModels[provider.id] ? '获取中...' : '刷新/获取模型列表'}
-                                </button>
-                            )}
-                        </div>
-                        
-                        <div className="relative">
+                    <div className="pt-2">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">默认模型 (Default Model)</label>
+                        <div className="flex gap-2">
                             <select 
                                 value={config.selectedModel}
                                 onChange={(e) => updateProviderConfig(provider.id, 'selectedModel', e.target.value)}
-                                className="w-full text-xs border-gray-300 border rounded p-2 focus:ring-green-500 focus:border-green-500"
+                                className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-green-500"
                             >
                                 {availableModels.map(m => (
                                     <option key={m.id} value={m.id}>{m.name}</option>
                                 ))}
                             </select>
-                            {config.fetchedModels && config.fetchedModels.length > 0 && (
-                                <div className="absolute right-8 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                                    <span className="text-[10px] bg-blue-100 text-blue-600 px-1 rounded">API Fetched</span>
-                                </div>
+                            
+                            {provider.id !== 'gemini' && (
+                                <button 
+                                    onClick={() => handleFetchModels(provider.id)}
+                                    disabled={isFetchingModels[provider.id]}
+                                    className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded border border-gray-300 whitespace-nowrap"
+                                >
+                                    {isFetchingModels[provider.id] ? 'Fetching...' : '获取模型列表'}
+                                </button>
                             )}
                         </div>
-
                         {fetchError[provider.id] && (
                             <p className="text-[10px] text-red-500 mt-1">{fetchError[provider.id]}</p>
                         )}
-
-                        {isGemini && (
-                            <div className="flex items-center mt-2">
-                                <input 
-                                  id="thinking" 
-                                  type="checkbox" 
-                                  checked={localEnableThinking}
-                                  onChange={(e) => setLocalEnableThinking(e.target.checked)}
-                                  className="h-3 w-3 text-green-600 focus:ring-green-500 border-gray-300 rounded"
-                                />
-                                <label htmlFor="thinking" className="ml-2 block text-xs text-gray-600">
-                                    启用思维链 (Thinking) - 仅限支持模型
-                                </label>
-                            </div>
-                        )}
                     </div>
-
                  </div>
               </div>
              );
@@ -1030,337 +949,254 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     </div>
   );
 
-  const renderCharactersTab = () => {
-    const editingPersona = localPersonas.find(p => p.id === editingPersonaId);
-
-    if (editingPersonaId && editingPersona) {
-        // Edit Mode
-        const currentProvider = editingPersona.config?.provider || 'gemini';
-        const providerConfig = localProviderConfigs[currentProvider];
+  const renderCharactersTab = () => (
+    <div className="space-y-6 h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex items-center justify-between mb-4">
+             <h3 className="text-lg font-medium text-gray-900">角色管理 (Admin)</h3>
+             <button 
+                onClick={handleAddPersona}
+                className="text-xs bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 flex items-center gap-1"
+             >
+                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                 添加角色
+             </button>
+        </div>
         
-        const availableModels = providerConfig.fetchedModels && providerConfig.fetchedModels.length > 0
-            ? providerConfig.fetchedModels
-            : MODEL_PROVIDERS.find(p => p.id === currentProvider)?.models || [];
-
-        return (
-            <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
-                <div className="flex items-center gap-2 mb-4">
-                    <button onClick={() => setEditingPersonaId(null)} className="p-1 hover:bg-gray-100 rounded">
-                        <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                    </button>
-                    <h3 className="text-lg font-medium text-gray-900">编辑角色: {editingPersona.name}</h3>
-                    
-                    {/* AI Generate Button */}
-                    <button 
-                        onClick={handleAIGeneratePersona}
-                        disabled={isGeneratingPersona}
-                        className="ml-auto text-xs bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded flex items-center gap-1 transition-colors disabled:opacity-50"
-                        title="AI 自动生成头像、名称、人设和随机模型配置"
-                    >
-                       {isGeneratingPersona ? (
-                           <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                       ) : (
-                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                       )}
-                       AI 一键生成
-                    </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-4">
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2 flex items-center gap-4 mb-2">
-                            <img src={editingPersona.avatar} className="w-16 h-16 rounded-md bg-gray-200 object-cover border" />
-                            <div className="flex-1">
-                                <label className="block text-xs font-medium text-gray-700 mb-1">头像 URL</label>
-                                <input 
-                                    type="text" 
-                                    value={editingPersona.avatar}
-                                    onChange={(e) => updatePersonaField(editingPersona.id, 'avatar', e.target.value)}
-                                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">名称</label>
-                            <input 
-                                type="text" 
-                                value={editingPersona.name}
-                                onChange={(e) => updatePersonaField(editingPersona.id, 'name', e.target.value)}
-                                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">角色标签 (Role)</label>
-                            <input 
-                                type="text" 
-                                value={editingPersona.role}
-                                onChange={(e) => updatePersonaField(editingPersona.id, 'role', e.target.value)}
-                                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
-                            />
-                        </div>
-                     </div>
-
-                     <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">人设指令 (System Instruction)</label>
-                        <textarea 
-                            value={editingPersona.systemInstruction}
-                            onChange={(e) => updatePersonaField(editingPersona.id, 'systemInstruction', e.target.value)}
-                            className="w-full text-sm border border-gray-300 rounded px-2 py-2 h-24 resize-none"
-                            placeholder="你叫... 你的性格是..."
-                        />
-                     </div>
-
-                     <div className="border-t border-gray-100 my-4"></div>
-
-                     <div>
-                        <h4 className="text-sm font-semibold text-gray-800 mb-3">模型配置</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">服务提供商</label>
-                                <select 
-                                    value={currentProvider}
-                                    onChange={(e) => updatePersonaConfig(editingPersona.id, 'provider', e.target.value)}
-                                    className="w-full text-sm border border-gray-300 rounded px-2 py-2"
-                                >
-                                    {MODEL_PROVIDERS.map(p => (
-                                        <option key={p.id} value={p.id}>{p.name}</option>
-                                    ))}
-                                </select>
-                             </div>
-                             <div>
-                                <label className="block text-xs font-medium text-gray-700 mb-1">选择模型</label>
-                                <select 
-                                    value={editingPersona.config?.modelId}
-                                    onChange={(e) => updatePersonaConfig(editingPersona.id, 'modelId', e.target.value)}
-                                    className="w-full text-sm border border-gray-300 rounded px-2 py-2"
-                                >
-                                    {availableModels.map(m => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </select>
-                             </div>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-2">
-                            * 如使用自定义模型，请确保在“模型接入”中已获取模型列表。
-                        </p>
-                     </div>
-                </div>
-            </div>
-        );
-    }
-
-    // List Mode
-    return (
-        <div className="h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
-             <div className="flex items-center justify-between mb-4">
-                <div>
-                    <h3 className="text-lg font-medium text-gray-900">角色管理 (Admin)</h3>
-                    <p className="text-xs text-gray-500">创建并配置参与讨论的 AI 角色。</p>
-                </div>
-                <button 
-                  onClick={handleAddPersona}
-                  className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1.5 rounded flex items-center"
-                >
-                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                    新建角色
-                </button>
-             </div>
-
-             <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 grid grid-cols-1 gap-3 pb-4">
+        <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+             <div className="space-y-4">
                  {localPersonas.map(persona => {
-                    const providerInfo = MODEL_PROVIDERS.find(p => p.id === (persona.config?.provider || 'gemini'));
-                    return (
-                        <div key={persona.id} className="flex items-center p-3 border border-gray-200 rounded-lg bg-white hover:border-green-300 transition-colors group">
-                            <img src={persona.avatar} alt={persona.name} className="w-10 h-10 rounded-md object-cover bg-gray-100" />
-                            <div className="ml-3 flex-1 min-w-0">
-                                <div className="flex items-baseline">
-                                    <h4 className="text-sm font-medium text-gray-900 truncate mr-2">{persona.name}</h4>
-                                    <span className="text-[10px] bg-gray-100 text-gray-500 px-1 rounded">{persona.role}</span>
-                                </div>
-                                <div className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                                    <img src={providerInfo?.icon} className="w-3 h-3 rounded-full" />
-                                    <span>{providerInfo?.name} / {persona.config?.modelId || 'Default'}</span>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button 
-                                    onClick={() => setEditingPersonaId(persona.id)}
-                                    className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded"
-                                    title="编辑"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-                                </button>
-                                <button 
-                                    onClick={() => handleDeletePersona(persona.id)}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                                    title="删除"
-                                >
-                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                </button>
-                            </div>
-                        </div>
-                    );
+                     const isEditing = editingPersonaId === persona.id;
+                     return (
+                         <div key={persona.id} className="border border-gray-200 rounded-lg p-4 bg-white relative group">
+                             <div className="flex items-start justify-between">
+                                 <div className="flex gap-3">
+                                     <div className="relative">
+                                         <img src={persona.avatar} alt="avatar" className="w-10 h-10 rounded-md bg-gray-100 object-cover" />
+                                         {isEditing && (
+                                             <div className="absolute -bottom-1 -right-1">
+                                                 <button 
+                                                    onClick={() => setEditingPersonaId(null)}
+                                                    className="bg-gray-800 text-white text-[10px] p-0.5 rounded"
+                                                 >
+                                                     Done
+                                                 </button>
+                                             </div>
+                                         )}
+                                     </div>
+                                     <div>
+                                         {isEditing ? (
+                                             <div className="flex flex-col gap-1">
+                                                 <input 
+                                                    value={persona.name} 
+                                                    onChange={(e) => updatePersonaField(persona.id, 'name', e.target.value)}
+                                                    className="text-sm font-bold border rounded px-1 py-0.5"
+                                                    placeholder="Name"
+                                                 />
+                                                 <input 
+                                                    value={persona.role} 
+                                                    onChange={(e) => updatePersonaField(persona.id, 'role', e.target.value)}
+                                                    className="text-xs text-gray-500 border rounded px-1 py-0.5"
+                                                    placeholder="Role"
+                                                 />
+                                             </div>
+                                         ) : (
+                                             <>
+                                                 <div className="font-bold text-sm text-gray-900">{persona.name}</div>
+                                                 <div className="text-xs text-gray-500">{persona.role}</div>
+                                             </>
+                                         )}
+                                     </div>
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-2">
+                                     {!isEditing && (
+                                         <button 
+                                            onClick={() => setEditingPersonaId(persona.id)}
+                                            className="text-gray-400 hover:text-blue-600 p-1"
+                                         >
+                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                         </button>
+                                     )}
+                                     <button 
+                                        onClick={() => handleDeletePersona(persona.id)}
+                                        className="text-gray-400 hover:text-red-600 p-1"
+                                     >
+                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                     </button>
+                                 </div>
+                             </div>
+
+                             {isEditing ? (
+                                 <div className="mt-4 space-y-3 border-t pt-3 border-gray-100">
+                                      <div className="flex items-center gap-2">
+                                           <button 
+                                                onClick={handleAIGeneratePersona}
+                                                disabled={isGeneratingPersona}
+                                                className="text-xs bg-purple-50 text-purple-700 border border-purple-200 px-3 py-1.5 rounded flex items-center gap-1 hover:bg-purple-100"
+                                           >
+                                                {isGeneratingPersona ? 'Generating...' : '🎲 AI Generate Profile'}
+                                           </button>
+                                      </div>
+                                     
+                                     <div>
+                                         <label className="block text-xs font-medium text-gray-500 mb-1">Avatar URL</label>
+                                         <input 
+                                            value={persona.avatar} 
+                                            onChange={(e) => updatePersonaField(persona.id, 'avatar', e.target.value)}
+                                            className="w-full text-xs border rounded px-2 py-1"
+                                         />
+                                     </div>
+                                     <div>
+                                         <label className="block text-xs font-medium text-gray-500 mb-1">System Instruction (Prompt)</label>
+                                         <textarea 
+                                            value={persona.systemInstruction} 
+                                            onChange={(e) => updatePersonaField(persona.id, 'systemInstruction', e.target.value)}
+                                            className="w-full text-xs border rounded px-2 py-1 h-20"
+                                         />
+                                     </div>
+                                     <div className="grid grid-cols-2 gap-2">
+                                         <div>
+                                             <label className="block text-xs font-medium text-gray-500 mb-1">Provider</label>
+                                             <select 
+                                                value={persona.config.provider}
+                                                onChange={(e) => updatePersonaConfig(persona.id, 'provider', e.target.value)}
+                                                className="w-full text-xs border rounded px-2 py-1"
+                                             >
+                                                 {MODEL_PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                             </select>
+                                         </div>
+                                         <div>
+                                             <label className="block text-xs font-medium text-gray-500 mb-1">Model ID</label>
+                                             <input 
+                                                value={persona.config.modelId}
+                                                onChange={(e) => updatePersonaConfig(persona.id, 'modelId', e.target.value)}
+                                                className="w-full text-xs border rounded px-2 py-1"
+                                             />
+                                         </div>
+                                     </div>
+                                 </div>
+                             ) : (
+                                 <div className="mt-2 text-xs text-gray-600 line-clamp-2">
+                                     {persona.systemInstruction}
+                                 </div>
+                             )}
+                         </div>
+                     );
                  })}
              </div>
         </div>
-    );
-  };
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-[800px] h-[600px] flex overflow-hidden">
-        
-        {/* Sidebar */}
-        <div className="w-[180px] bg-gray-50 border-r border-gray-200 flex flex-col pt-6 pb-4 flex-shrink-0">
-            <div className="px-6 mb-8">
-                <h2 className="text-lg font-bold text-gray-800">设置</h2>
-                {!isAuthenticated && (
-                    <p className="text-[10px] text-gray-400 mt-1">普通用户模式</p>
-                )}
-            </div>
-            
-            <nav className="flex-1 space-y-1 px-3">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl w-[800px] h-[600px] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+        <div className="flex h-full">
+            {/* Sidebar Navigation */}
+            <div className="flex flex-col w-[200px] border-r border-gray-100 bg-gray-50 p-4 gap-1">
+                <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 px-2">Settings</h2>
+                
                 <button 
-                  onClick={() => setActiveTab('profile')}
-                  className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    activeTab === 'profile' 
-                      ? 'bg-white text-green-600 shadow-sm' 
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
+                    onClick={() => setActiveTab('profile')}
+                    className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'profile' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
                 >
-                    <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                     个人资料
                 </button>
-                
+
                 {isAuthenticated && (
                     <>
-                    <button 
-                        onClick={() => setActiveTab('cloud')}
-                        className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                            activeTab === 'cloud' 
-                            ? 'bg-white text-green-600 shadow-sm' 
-                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                        }`}
-                    >
-                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        云端同步
-                    </button>
-                    
-                    <button 
-                    onClick={() => setActiveTab('models')}
-                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'models' 
-                        ? 'bg-white text-green-600 shadow-sm' 
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                    >
-                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        模型接入
-                    </button>
-                    
-                    <button 
-                    onClick={() => setActiveTab('characters')}
-                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'characters' 
-                        ? 'bg-white text-green-600 shadow-sm' 
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                    >
-                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-                        角色管理
-                    </button>
-
-                    <button 
-                    onClick={() => setActiveTab('users')}
-                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'users' 
-                        ? 'bg-white text-green-600 shadow-sm' 
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                    >
-                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                        用户管理
-                    </button>
-
-                    <button 
-                    onClick={() => setActiveTab('notifications')}
-                    className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        activeTab === 'notifications' 
-                        ? 'bg-white text-green-600 shadow-sm' 
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`}
-                    >
-                        <svg className="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                        通知推送
-                    </button>
+                        <button 
+                            onClick={() => setActiveTab('models')}
+                            className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'models' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            模型接入
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('characters')}
+                            className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'characters' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            角色管理
+                        </button>
+                         <button 
+                            onClick={() => setActiveTab('users')}
+                            className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'users' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            用户管理
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('cloud')}
+                            className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'cloud' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            云端同步
+                        </button>
+                        <button 
+                            onClick={() => setActiveTab('notifications')}
+                            className={`text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'notifications' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`}
+                        >
+                            通知推送
+                        </button>
                     </>
                 )}
-            </nav>
+            </div>
 
-            <div className="px-6 mt-auto">
-                <div className="text-xs text-gray-400">Version 1.5.0</div>
-                <div className="text-[10px] text-gray-300 mt-1">AI Round Table</div>
+            {/* Content Area */}
+            <div className="flex-1 p-8 overflow-hidden bg-white">
+                {activeTab === 'profile' && renderProfileTab()}
+                {activeTab === 'models' && isAuthenticated && renderModelsTab()}
+                {activeTab === 'characters' && isAuthenticated && renderCharactersTab()}
+                {activeTab === 'users' && isAuthenticated && renderUsersTab()}
+                {activeTab === 'cloud' && isAuthenticated && renderCloudTab()}
+                {activeTab === 'notifications' && isAuthenticated && renderNotificationsTab()}
             </div>
         </div>
+        
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
+           {exportedCode ? (
+               <div className="flex-1 mr-4">
+                   <input 
+                      readOnly 
+                      value="Code copied to clipboard (Simulated)" 
+                      className="w-full text-xs border border-gray-200 rounded px-2 py-1.5 text-gray-500 bg-gray-100"
+                   />
+                   {/* In real app, we would copy to clipboard here */}
+               </div>
+           ) : <div className="flex-1"></div>}
+           
+           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors">取消</button>
+           <button 
+              onClick={handleSave} 
+              disabled={isSaving}
+              className="px-6 py-2 text-sm bg-gray-900 text-white rounded-lg hover:bg-black transition-colors shadow-lg shadow-gray-200 disabled:opacity-50"
+           >
+              {isSaving ? '保存中...' : '保存更改'}
+           </button>
+        </div>
 
-        {/* Right Content */}
-        <div className="flex-1 flex flex-col bg-white min-w-0 relative">
-             {/* Scrollable Area */}
-             <div className="flex-1 overflow-hidden p-6 relative">
-                 {activeTab === 'profile' && renderProfileTab()}
-                 {activeTab === 'models' && renderModelsTab()}
-                 {activeTab === 'characters' && renderCharactersTab()}
-                 {activeTab === 'users' && renderUsersTab()}
-                 {activeTab === 'cloud' && renderCloudTab()}
-                 {activeTab === 'notifications' && renderNotificationsTab()}
-             </div>
-
-             {/* Footer Actions */}
-             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 z-10">
-                 <button 
-                    onClick={onClose}
-                    className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
-                 >
-                    取消
-                 </button>
-                 <button 
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    className="px-4 py-2 text-sm bg-gray-900 text-white rounded hover:bg-black transition-colors disabled:opacity-70 flex items-center gap-2"
-                 >
-                    {isSaving ? '保存中...' : '保存更改'}
-                 </button>
-             </div>
-             
-             {/* Export Code Overlay */}
-             {exportedCode && (
-                <div className="absolute inset-0 bg-black bg-opacity-60 z-[60] flex items-center justify-center p-8 backdrop-blur-sm">
-                    <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-full">
-                        <div className="flex justify-between items-center p-4 border-b border-gray-100">
-                            <h3 className="font-medium text-gray-900">系统默认配置导出</h3>
-                            <button onClick={() => setExportedCode(null)} className="text-gray-400 hover:text-gray-600">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                            </button>
-                        </div>
-                        <div className="p-4 overflow-auto bg-gray-50 flex-1 relative group">
-                            <pre className="text-xs font-mono text-gray-700 whitespace-pre-wrap break-all">{exportedCode}</pre>
-                            <button 
-                                onClick={() => {
-                                    navigator.clipboard.writeText(exportedCode);
-                                    alert("代码已复制到剪贴板");
-                                }}
-                                className="absolute top-2 right-2 bg-white border border-gray-200 shadow-sm px-3 py-1 text-xs rounded text-gray-600 hover:text-green-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                                复制
-                            </button>
-                        </div>
-                        <div className="p-4 border-t border-gray-100 text-right">
-                            <button onClick={() => setExportedCode(null)} className="bg-gray-900 text-white px-4 py-2 rounded text-sm">关闭</button>
-                        </div>
+        {/* Export Code Modal Overlay */}
+        {exportedCode && (
+            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center p-8 z-50">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-full">
+                    <div className="p-4 border-b flex justify-between items-center">
+                        <h3 className="font-medium">Export Configuration</h3>
+                        <button onClick={() => setExportedCode(null)}>✕</button>
+                    </div>
+                    <textarea 
+                        className="flex-1 p-4 font-mono text-xs bg-gray-50 resize-none focus:outline-none"
+                        value={exportedCode}
+                        readOnly
+                    />
+                    <div className="p-4 border-t text-right">
+                        <button 
+                            onClick={() => {navigator.clipboard.writeText(exportedCode); setExportedCode(null);}}
+                            className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700"
+                        >
+                            Copy & Close
+                        </button>
                     </div>
                 </div>
-            )}
-        </div>
+            </div>
+        )}
       </div>
     </div>
   );

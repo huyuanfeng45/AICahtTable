@@ -45,7 +45,7 @@ const generateMockIp = () => {
 const App: React.FC = () => {
   // User Management State
   const [users, setUsers] = useState<UserProfile[]>(() => loadState('app_users', []));
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => loadState('app_current_user', null));
 
   // --- Data State (Dependent on currentUser) ---
   const [chats, setChats] = useState<ChatGroup[]>([]);
@@ -120,6 +120,15 @@ const App: React.FC = () => {
 
   // Ref for debounced save
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist Current User (Session)
+  useEffect(() => {
+    if (currentUser) {
+        localStorage.setItem('app_current_user', JSON.stringify(currentUser));
+    } else {
+        localStorage.removeItem('app_current_user');
+    }
+  }, [currentUser]);
 
   // Persist Admin Credentials on change
   useEffect(() => {
