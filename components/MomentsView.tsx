@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, AppSettings, MomentPost, MomentLike, MomentComment } from '../types';
 import { generateMomentInteractions, generateMomentPost } from '../services/geminiService';
@@ -797,7 +796,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                       <input 
                                         type="range" 
                                         min="0" 
-                                        max="50" 
+                                        max="288" 
                                         value={aiConfig.likeCount} 
                                         onChange={(e) => setAiConfig(prev => ({...prev, likeCount: parseInt(e.target.value)}))}
                                         className="w-full h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#07c160]"
@@ -1246,7 +1245,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                           <input 
                               type="range" 
                               min="0" 
-                              max="50" 
+                              max="288" 
                               step="1"
                               value={aiLikeCount}
                               onChange={(e) => setAiLikeCount(parseInt(e.target.value))}
