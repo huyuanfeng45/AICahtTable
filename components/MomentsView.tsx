@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, AppSettings, MomentPost, MomentLike, MomentComment } from '../types';
 import { generateMomentInteractions, generateMomentPost } from '../services/geminiService';
@@ -14,6 +15,8 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const [isPosting, setIsPosting] = useState(false);
   const [postText, setPostText] = useState('');
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [customTime, setCustomTime] = useState('');
+  const [rawDateValue, setRawDateValue] = useState(''); // Store ISO format for input
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cover Image State
@@ -51,6 +54,12 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const [viewingUser, setViewingUser] = useState<{name: string, avatar: string} | null>(null);
   const [viewingPost, setViewingPost] = useState<MomentPost | null>(null);
 
+  // Interaction State (Menu & Comments)
+  const [activeMenuPostId, setActiveMenuPostId] = useState<number | null>(null);
+  const [commentingPostId, setCommentingPostId] = useState<number | null>(null);
+  const [commentInput, setCommentInput] = useState('');
+  const commentInputRef = useRef<HTMLInputElement>(null);
+
   // Load settings for API calls
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   useEffect(() => {
@@ -62,6 +71,22 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
           } catch(e) {}
       }
   }, []);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+        if (activeMenuPostId !== null) setActiveMenuPostId(null);
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeMenuPostId]);
+
+  // Focus comment input when opened
+  useEffect(() => {
+      if (commentingPostId !== null && commentInputRef.current) {
+          commentInputRef.current.focus();
+      }
+  }, [commentingPostId]);
 
   // Load Cover Image preference
   useEffect(() => {
@@ -136,7 +161,25 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       setIsPosting(false);
       setPostText('');
       setSelectedImages([]);
+      setCustomTime('');
+      setRawDateValue('');
       setAiConfig({ enabled: false, likeCount: 5, commentCount: 3 });
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      setRawDateValue(val);
+      if (val) {
+           const date = new Date(val);
+           const year = date.getFullYear();
+           const month = date.getMonth() + 1;
+           const day = date.getDate();
+           const hour = date.getHours().toString().padStart(2, '0');
+           const minute = date.getMinutes().toString().padStart(2, '0');
+           setCustomTime(`${year}年${month}月${day}日 ${hour}:${minute}`);
+      } else {
+           setCustomTime('');
+      }
   };
 
   const handleSubmitPost = async () => {
@@ -151,20 +194,19 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
           },
           content: postText,
           images: selectedImages,
-          time: '刚刚',
+          time: customTime || '刚刚',
           likes: [],
           comments: []
       };
       
-      // Optimistic update
       onUpdatePosts([newPost, ...posts]);
       
-      // Close UI
       setIsPosting(false);
       setPostText('');
       setSelectedImages([]);
+      setCustomTime('');
+      setRawDateValue('');
       
-      // Async AI Generation
       if (aiConfig.enabled && (aiConfig.likeCount > 0 || aiConfig.commentCount > 0)) {
           try {
               const interactions = await generateMomentInteractions(
@@ -174,20 +216,17 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                   settings
               );
               
-              // Map likes to include avatars (Use picsum for photo-like avatars)
               const enrichedLikes: MomentLike[] = interactions.likes.map(name => ({
                   name,
                   avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200/200`
               }));
               
-              // Map comments to include avatars and time
               const enrichedComments: MomentComment[] = interactions.comments.map(c => ({
                   ...c,
                   avatar: `https://picsum.photos/seed/${encodeURIComponent(c.name)}/200/200`,
                   time: '刚刚'
               }));
 
-              // Update the post with generated data
               onUpdatePosts([
                   {
                       ...newPost,
@@ -214,21 +253,17 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
     try {
         const result = await generateMomentPost(aiPostTopic, aiImageCount, aiLikeCount, aiCommentCount, settings);
         
-        // Construct Avatar URL
         const avatarUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(result.avatarPrompt)}?width=200&height=200&nologo=true&seed=${Math.random()}`;
         
-        // Construct Image URLs
         const imageUrls = result.imagePrompts ? result.imagePrompts.map((prompt, idx) => 
             `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=800&height=800&nologo=true&seed=${Math.random() + idx}`
         ) : [];
 
-        // Enrich Likes with avatars (Use picsum for realistic look)
         const enrichedLikes: MomentLike[] = result.likes ? result.likes.map(name => ({
             name,
             avatar: `https://picsum.photos/seed/${encodeURIComponent(name)}/200/200`
         })) : [];
         
-        // Enrich Comments
         const enrichedComments: MomentComment[] = result.comments ? result.comments.map(c => ({
             ...c,
             avatar: `https://picsum.photos/seed/${encodeURIComponent(c.name)}/200/200`,
@@ -285,7 +320,6 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
     e.target.value = ''; 
   };
   
-  // Profile Edit Handlers
   const handleOpenEditProfile = () => {
       setEditName(currentUser?.name || '');
       setEditAvatar(currentUser?.avatar || '');
@@ -327,6 +361,104 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       }
   };
 
+  // --- Interaction Logic (Like/Comment) ---
+
+  const handleLike = (post: MomentPost) => {
+      const userName = currentUser?.name || '我';
+      const isLiked = post.likes.some(l => l.name === userName);
+      let newLikes = [...post.likes];
+      
+      if (isLiked) {
+          newLikes = newLikes.filter(l => l.name !== userName);
+      } else {
+          newLikes.push({
+              name: userName,
+              avatar: currentUser?.avatar || "https://picsum.photos/seed/me/100/100"
+          });
+      }
+      
+      const updatedPost = { ...post, likes: newLikes };
+      const newPosts = posts.map(p => p.id === post.id ? updatedPost : p);
+      onUpdatePosts(newPosts);
+      
+      if (viewingPost?.id === post.id) {
+          setViewingPost(updatedPost);
+      }
+      
+      setActiveMenuPostId(null);
+  };
+
+  const handleCommentClick = (postId: number) => {
+      setActiveMenuPostId(null);
+      // If we are in main feed, show inline input
+      setCommentingPostId(postId);
+      // If we are in detail view, standard input handles it
+      if (viewingPost?.id === postId) {
+          // Focus is handled by the detail view render which uses same state logic implicitly or we can just rely on user clicking
+      }
+  };
+
+  const handleSubmitComment = (postId: number) => {
+      if (!commentInput.trim()) return;
+      
+      const post = posts.find(p => p.id === postId);
+      if (!post) return;
+      
+      const newComment: MomentComment = {
+          name: currentUser?.name || '我',
+          content: commentInput.trim(),
+          avatar: currentUser?.avatar || "https://picsum.photos/seed/me/100/100",
+          time: '刚刚'
+      };
+      
+      const updatedPost = { ...post, comments: [...post.comments, newComment] };
+      const newPosts = posts.map(p => p.id === postId ? updatedPost : p);
+      onUpdatePosts(newPosts);
+      
+      if (viewingPost?.id === postId) {
+          setViewingPost(updatedPost);
+      }
+      
+      setCommentingPostId(null);
+      setCommentInput('');
+  };
+
+  // --- Helper: Menu Component for Reusability ---
+  const InteractionMenu = ({ post }: { post: MomentPost }) => {
+      const isLiked = post.likes.some(l => l.name === (currentUser?.name || '我'));
+      
+      return (
+          <div 
+             className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-20"
+             onClick={(e) => e.stopPropagation()}
+          >
+              <button 
+                  onClick={() => handleLike(post)}
+                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px]"
+              >
+                  <svg className="w-5 h-5" fill={isLiked ? "#eb4d4b" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                      {isLiked ? (
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" fill="#eb4d4b" stroke="none"></path>
+                      ) : (
+                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                      )}
+                  </svg>
+                  <span className="ml-1.5 text-[14px] font-medium">{isLiked ? '取消' : '赞'}</span>
+              </button>
+              <div className="w-[1px] h-5 bg-[#3b3b3b]"></div>
+              <button 
+                  onClick={() => handleCommentClick(post.id)}
+                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px]"
+              >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                  </svg>
+                  <span className="ml-1.5 text-[14px] font-medium">评论</span>
+              </button>
+          </div>
+      );
+  };
+
   // --- View: Post Detail ---
   if (viewingPost) {
       return (
@@ -360,7 +492,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                             }}
                           />
 
-                          {/* Right Column: Content & Interactions */}
+                          {/* Right Column: Content */}
                           <div className="flex-1 min-w-0 pt-0.5">
                               {/* Name */}
                               <div className="text-[16px] font-bold text-[#576b95] leading-tight mb-1">
@@ -388,77 +520,94 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                               )}
                               
                               {/* Meta & Delete */}
-                              <div className="flex items-center justify-between mt-2 mb-4">
-                                  <div className="flex items-center gap-3 text-xs text-gray-400">
-                                      <span>2025年11月30日 20:18</span>
+                              <div className="flex items-center justify-between mt-2 mb-4 relative z-10">
+                                  <div className="flex items-center gap-3 text-sm text-gray-400">
+                                      <span className="text-[15px]">{viewingPost.time || '2025年11月30日 20:18'}</span>
                                       {(viewingPost.user.name === currentUser?.name || viewingPost.id > 2) && (
-                                          <button onClick={() => handleDeletePost(viewingPost.id)}>
-                                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                          <button 
+                                              onClick={() => handleDeletePost(viewingPost.id)}
+                                              className="ml-2 p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors"
+                                              title="删除"
+                                          >
+                                              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                           </button>
                                       )}
                                   </div>
-                                  <div className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors">
-                                     ••
+                                  
+                                  <div className="relative">
+                                      {activeMenuPostId === viewingPost.id && <InteractionMenu post={viewingPost} />}
+                                      <div 
+                                        className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveMenuPostId(activeMenuPostId === viewingPost.id ? null : viewingPost.id);
+                                        }}
+                                      >
+                                          ••
+                                      </div>
                                   </div>
                               </div>
-
-                              {/* Interaction Section (Aligned right) */}
-                              <div className="bg-[#f7f7f7] rounded-[4px] p-3 relative mt-3">
-                                   {/* Triangle */}
-                                   <div className="absolute -top-1.5 left-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#f7f7f7]"></div>
-
-                                   {/* Likes */}
-                                   {viewingPost.likes.length > 0 && (
-                                       <div className="flex items-start pb-2.5 border-b border-gray-200 mb-2.5">
-                                           <div className="w-6 flex-shrink-0 pt-1">
-                                              <svg className="w-4 h-4 text-[#576b95]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
-                                           </div>
-                                           <div className="flex-1 flex flex-wrap gap-1.5">
-                                               {viewingPost.likes.map((like, i) => (
-                                                   <img 
-                                                     key={i}
-                                                     src={like.avatar} 
-                                                     alt={like.name}
-                                                     className="w-8 h-8 rounded-md bg-gray-200 object-cover" 
-                                                     title={like.name}
-                                                   />
-                                               ))}
-                                           </div>
-                                       </div>
-                                   )}
-
-                                   {/* Comments */}
-                                   {viewingPost.comments.length > 0 ? (
-                                       <div className="flex items-start">
-                                            <div className="w-6 flex-shrink-0 pt-2">
-                                                <svg className="w-4 h-4 text-[#576b95]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
-                                            </div>
-                                            <div className="flex-1 space-y-3">
-                                               {viewingPost.comments.map((comment, i) => (
-                                                   <div key={i} className="flex gap-2.5 items-start">
-                                                       <img 
-                                                         src={comment.avatar || `https://picsum.photos/seed/${encodeURIComponent(comment.name)}/200/200`} 
-                                                         className="w-8 h-8 rounded-md bg-gray-200 object-cover mt-0.5 flex-shrink-0" 
-                                                         alt="Avatar"
-                                                       />
-                                                       <div className="flex-1 min-w-0">
-                                                           <div className="flex justify-between items-baseline">
-                                                               <span className="text-[#576b95] text-[13px] font-medium leading-tight truncate pr-2">{comment.name}</span>
-                                                               <span className="text-gray-400 text-[10px] leading-tight flex-shrink-0">{comment.time || '刚刚'}</span>
-                                                           </div>
-                                                           <div className="text-[14px] text-gray-800 leading-normal break-words mt-0.5">
-                                                               {comment.content}
-                                                           </div>
-                                                       </div>
-                                                   </div>
-                                               ))}
-                                            </div>
-                                       </div>
-                                   ) : (
-                                       !viewingPost.likes.length && <div className="text-center text-gray-400 text-xs py-2">暂无互动</div>
-                                   )}
-                              </div>
                           </div>
+                      </div>
+                      
+                      {/* Interaction Section (Full Width below content) */}
+                      <div className="bg-[#f7f7f7] rounded-[4px] p-3 relative mt-3">
+                           {/* Triangle */}
+                           <div className="absolute -top-1.5 left-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#f7f7f7]"></div>
+
+                           {/* Likes */}
+                           {viewingPost.likes.length > 0 && (
+                               <div className="flex items-start pb-2.5 border-b border-gray-200 mb-2.5">
+                                   <div className="w-6 flex-shrink-0 pt-1">
+                                      <svg className="w-5 h-5 text-[#576b95]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                                   </div>
+                                   <div className="flex-1 flex flex-wrap gap-1.5">
+                                       {viewingPost.likes.map((like, i) => (
+                                           <img 
+                                             key={i}
+                                             src={like.avatar} 
+                                             alt={like.name}
+                                             className="w-8 h-8 rounded-md bg-gray-200 object-cover" 
+                                             title={like.name}
+                                           />
+                                       ))}
+                                   </div>
+                               </div>
+                           )}
+
+                           {/* Comments */}
+                           {viewingPost.comments.length > 0 ? (
+                               <div className="flex items-start">
+                                    <div className="w-6 flex-shrink-0 pt-1">
+                                        {/* Updated to Speech Bubble Icon */}
+                                        <svg className="w-5 h-5 text-[#576b95]" fill="currentColor" viewBox="0 0 24 24">
+                                            <path fillRule="evenodd" d="M20 4H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h4l4 4 4-4h4c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 16V6h16v10H4z" clipRule="evenodd"/>
+                                        </svg>
+                                    </div>
+                                    <div className="flex-1 space-y-3">
+                                       {viewingPost.comments.map((comment, i) => (
+                                           <div key={i} className="flex gap-2.5 items-start">
+                                               <img 
+                                                 src={comment.avatar || `https://picsum.photos/seed/${encodeURIComponent(comment.name)}/200/200`} 
+                                                 className="w-8 h-8 rounded-md bg-gray-200 object-cover mt-0.5 flex-shrink-0" 
+                                                 alt="Avatar"
+                                               />
+                                               <div className="flex-1 min-w-0">
+                                                   <div className="flex justify-between items-baseline">
+                                                       <span className="text-[#576b95] text-[13px] font-medium leading-tight truncate pr-2">{comment.name}</span>
+                                                       <span className="text-gray-400 text-[10px] leading-tight flex-shrink-0">{comment.time || '刚刚'}</span>
+                                                   </div>
+                                                   <div className="text-[14px] text-gray-800 leading-normal break-words mt-0.5">
+                                                       {comment.content}
+                                                   </div>
+                                               </div>
+                                           </div>
+                                       ))}
+                                    </div>
+                               </div>
+                           ) : (
+                               !viewingPost.likes.length && <div className="text-center text-gray-400 text-xs py-2">暂无互动</div>
+                           )}
                       </div>
                   </div>
               </div>
@@ -467,16 +616,21 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
               <div className="h-[50px] border-t border-gray-100 bg-gray-50 px-4 flex items-center gap-3 flex-shrink-0">
                   <div className="flex-1 bg-white rounded-md border border-gray-200 h-9 flex items-center px-3">
                       <input 
-                        type="text" 
+                        type="text"
+                        value={commentInput}
+                        onChange={(e) => setCommentInput(e.target.value)}
                         placeholder="发表评论:" 
                         className="flex-1 text-sm bg-transparent focus:outline-none"
+                        onKeyDown={e => {
+                            if(e.key === 'Enter') handleSubmitComment(viewingPost.id);
+                        }}
                       />
                   </div>
-                  <button className="text-gray-500 hover:text-gray-700 p-1">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                  </button>
-                  <button className="text-gray-500 hover:text-gray-700 p-1">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                  <button 
+                    onClick={() => handleSubmitComment(viewingPost.id)}
+                    className="text-[#07c160] font-medium text-sm"
+                  >
+                      发送
                   </button>
               </div>
           </div>
@@ -545,6 +699,45 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                   
                   {/* Options List */}
                   <div className="mt-12 border-t border-gray-100 px-6">
+                      
+                      <div className="flex items-center justify-between py-4 border-b border-gray-100 -mx-6 px-6 cursor-pointer active:bg-gray-50 relative">
+                          <div className="flex items-center gap-3">
+                              <div className="w-6 flex justify-center">
+                                  <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                              </div>
+                              <span className="text-[16px] text-gray-900">显示时间</span>
+                          </div>
+                          <div className="flex items-center gap-2 relative">
+                              <span className={`text-[16px] ${customTime ? 'text-gray-900' : 'text-gray-500'}`}>
+                                  {customTime || '刚刚'}
+                              </span>
+                              
+                              {customTime ? (
+                                   <button 
+                                      onClick={(e) => {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          setCustomTime('');
+                                          setRawDateValue('');
+                                      }}
+                                      className="p-1 text-gray-400 hover:text-gray-600 z-10"
+                                   >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                   </button>
+                              ) : (
+                                   <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                              )}
+
+                              {/* Invisible Input covering the area for native picker */}
+                              <input 
+                                  type="datetime-local"
+                                  value={rawDateValue}
+                                  onChange={handleDateChange}
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-0"
+                              />
+                          </div>
+                      </div>
+
                       <div className="flex items-center justify-between py-4 border-b border-gray-100 cursor-pointer active:bg-gray-50 -mx-6 px-6">
                           <div className="flex items-center gap-3">
                               <div className="w-6 flex justify-center">
@@ -914,27 +1107,42 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                 )}
                             </div>
                             
-                            {/* Footer Info */}
-                            <div className="flex items-center justify-between text-xs text-gray-400 mt-2 relative h-5 mb-1">
+                            {/* Footer Info & Menu */}
+                            <div className="flex items-center justify-between text-xs text-gray-400 mt-2 relative h-5 mb-1 z-10">
                                 <span>{post.time}</span>
-                                <div className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors">
-                                    •••
+                                
+                                <div className="relative">
+                                    {/* Interaction Menu */}
+                                    {activeMenuPostId === post.id && <InteractionMenu post={post} />}
+                                    
+                                    <div 
+                                        className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveMenuPostId(activeMenuPostId === post.id ? null : post.id);
+                                        }}
+                                    >
+                                        ••
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Likes and Comments Section */}
                             {(post.likes.length > 0 || post.comments.length > 0) && (
-                                <div className="bg-[#f7f7f7] rounded-[4px] mt-2 text-[14px] leading-6 p-2 relative">
+                                <div className="bg-[#f7f7f7] rounded-[4px] mt-2 text-[14px] leading-6 p-2 relative animate-in fade-in duration-200">
                                     {/* Triangle Pointer */}
                                     <div className="absolute -top-1.5 left-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#f7f7f7]"></div>
 
                                     {/* Likes */}
                                     {post.likes.length > 0 && (
-                                        <div className="flex flex-wrap items-center gap-1 border-b border-gray-200/50 pb-1 mb-1">
-                                            <svg className="w-3.5 h-3.5 text-[#576b95]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                                        <div className="flex flex-wrap items-center border-b border-gray-200/50 pb-1 mb-1 leading-5">
+                                            <svg className="w-3.5 h-3.5 text-[#576b95] mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
                                             {post.likes.map((like, i) => (
-                                                <span key={i} className="text-[#576b95] font-medium cursor-pointer hover:underline">
-                                                    {like.name}{i < post.likes.length - 1 ? ', ' : ''}
+                                                <span key={i}>
+                                                    <span className="text-[#576b95] font-medium cursor-pointer hover:underline">
+                                                        {like.name}
+                                                    </span>
+                                                    {i < post.likes.length - 1 && <span className="text-black font-sans">, </span>}
                                                 </span>
                                             ))}
                                         </div>
@@ -942,11 +1150,34 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                     
                                     {/* Comments */}
                                     {post.comments.map((comment, i) => (
-                                        <div key={i} className="text-gray-900">
+                                        <div key={i} className="text-gray-900 leading-snug">
                                             <span className="text-[#576b95] font-medium cursor-pointer hover:underline">{comment.name}</span>
                                             <span className="text-gray-900">: {comment.content}</span>
                                         </div>
                                     ))}
+                                </div>
+                            )}
+                            
+                            {/* Inline Comment Input */}
+                            {commentingPostId === post.id && (
+                                <div className="mt-3 flex gap-2 animate-in fade-in duration-200" onClick={e => e.stopPropagation()}>
+                                    <input 
+                                        ref={commentInputRef}
+                                        type="text" 
+                                        value={commentInput}
+                                        onChange={e => setCommentInput(e.target.value)}
+                                        className="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-green-500"
+                                        placeholder="评论..."
+                                        onKeyDown={e => {
+                                            if(e.key === 'Enter') handleSubmitComment(post.id);
+                                        }}
+                                    />
+                                    <button 
+                                        onClick={() => handleSubmitComment(post.id)}
+                                        className="px-3 py-1.5 bg-green-500 text-white rounded text-sm hover:bg-green-600"
+                                    >
+                                        发送
+                                    </button>
                                 </div>
                             )}
                         </div>

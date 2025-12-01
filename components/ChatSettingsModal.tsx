@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChatGroup, Persona, ChatGroupConfig, Message, AppSettings } from '../types';
+import { ChatGroup, Persona, ChatGroupConfig, Message, AppSettings, ChatMemberConfig } from '../types';
 import { generateChatName, generateImagePrompt } from '../services/geminiService';
 
 interface ChatSettingsModalProps {
@@ -28,7 +28,7 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
   const [name, setName] = useState(chat.name);
   const [avatar, setAvatar] = useState(chat.avatar);
   const [selectedMembers, setSelectedMembers] = useState<string[]>(chat.members);
-  const [memberConfigs, setMemberConfigs] = useState<Record<string, { replyCount: number }>>(chat.config?.memberConfigs || {});
+  const [memberConfigs, setMemberConfigs] = useState<Record<string, ChatMemberConfig>>(chat.config?.memberConfigs || {});
   const [summaryAgentId, setSummaryAgentId] = useState<string>(chat.config?.summaryAgentId || '');
   
   // Speaking Order State
@@ -120,7 +120,7 @@ const ChatSettingsModal: React.FC<ChatSettingsModalProps> = ({
     } else {
       setSelectedMembers(prev => [...prev, personaId]);
       if (!memberConfigs[personaId]) {
-        setMemberConfigs(prev => ({ ...prev, [personaId]: { replyCount: 1 } }));
+        setMemberConfigs(prev => ({ ...prev, [personaId]: { roleId: personaId, replyCount: 1 } }));
       }
       setSpeakingOrder(prev => [...prev, personaId]);
     }
