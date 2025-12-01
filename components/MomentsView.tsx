@@ -1,5 +1,3 @@
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, AppSettings, MomentPost, MomentLike, MomentComment } from '../types';
 import { generateMomentInteractions, generateMomentPost } from '../services/geminiService';
@@ -17,7 +15,19 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const [postText, setPostText] = useState('');
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // Cover Image State
+  const [coverImage, setCoverImage] = useState('https://picsum.photos/seed/cover_wall/800/600');
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [showCoverMenu, setShowCoverMenu] = useState(false);
+  const [aiCoverPrompt, setAiCoverPrompt] = useState('');
+  const [isGeneratingCover, setIsGeneratingCover] = useState(false);
+
+  // Profile Edit State
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
+  const editAvatarInputRef = useRef<HTMLInputElement>(null);
 
   // AI Config State
   const [showAiConfig, setShowAiConfig] = useState(false);
@@ -52,6 +62,70 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
           } catch(e) {}
       }
   }, []);
+
+  // Load Cover Image preference
+  useEffect(() => {
+    if (currentUser) {
+        const savedCover = localStorage.getItem(`user_cover_${currentUser.id}`);
+        if (savedCover) {
+            setCoverImage(savedCover);
+        } else {
+            setCoverImage('https://picsum.photos/seed/cover_wall/800/600');
+        }
+    }
+  }, [currentUser]);
+
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.size > 5 * 1024 * 1024) {
+              alert("图片大小不能超过 5MB");
+              return;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              const result = ev.target?.result as string;
+              if (result) {
+                  setCoverImage(result);
+                  if (currentUser) {
+                      localStorage.setItem(`user_cover_${currentUser.id}`, result);
+                  }
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+      e.target.value = '';
+  };
+
+  const handleAiGenerateCover = async () => {
+    if (!aiCoverPrompt.trim()) return;
+    setIsGeneratingCover(true);
+    try {
+        const encodedPrompt = encodeURIComponent(aiCoverPrompt);
+        // Using a landscape aspect ratio for cover
+        const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1200&height=800&nologo=true&seed=${Math.random()}`;
+        
+        // Wait for image to load
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+             setCoverImage(url);
+             if (currentUser) {
+                 localStorage.setItem(`user_cover_${currentUser.id}`, url);
+             }
+             setIsGeneratingCover(false);
+             setShowCoverMenu(false);
+             setAiCoverPrompt('');
+        };
+        img.onerror = () => {
+            alert("生成图片失败，请重试");
+            setIsGeneratingCover(false);
+        };
+    } catch (e) {
+        console.error(e);
+        setIsGeneratingCover(false);
+    }
+  };
 
   const handlePostMoment = () => {
       setIsPosting(true);
@@ -210,8 +284,15 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
     }
     e.target.value = ''; 
   };
+  
+  // Profile Edit Handlers
+  const handleOpenEditProfile = () => {
+      setEditName(currentUser?.name || '');
+      setEditAvatar(currentUser?.avatar || '');
+      setShowEditProfileModal(true);
+  };
 
-  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
           if (file.size > 2 * 1024 * 1024) {
@@ -221,13 +302,20 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
           const reader = new FileReader();
           reader.onload = (ev) => {
               const result = ev.target?.result as string;
-              if (result && onUpdateUser) {
-                  onUpdateUser({ avatar: result });
+              if (result) {
+                  setEditAvatar(result);
               }
           };
           reader.readAsDataURL(file);
       }
       if (e.target) e.target.value = '';
+  };
+
+  const handleSaveProfile = () => {
+      if (onUpdateUser) {
+          onUpdateUser({ name: editName, avatar: editAvatar });
+      }
+      setShowEditProfileModal(false);
   };
   
   const handleDeletePost = (postId: number) => {
@@ -669,17 +757,34 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       {/* Cover Header */}
       <div className="relative mb-16">
          {/* Cover Image */}
-         <div className="h-[320px] w-full overflow-hidden bg-gray-200 relative group">
+         <div 
+            className="h-[320px] w-full overflow-hidden bg-gray-200 relative group cursor-pointer"
+            onClick={() => setShowCoverMenu(true)}
+            title="点击更换封面"
+         >
              <img 
-               src="https://picsum.photos/seed/cover_wall/800/600" 
+               src={coverImage} 
                alt="Cover" 
                className="w-full h-full object-cover"
              />
              
-             {/* Camera Icon - Top Right */}
+             {/* Hidden File Input for Cover */}
+             <input 
+                 type="file" 
+                 ref={coverInputRef} 
+                 className="hidden" 
+                 accept="image/*" 
+                 onChange={handleCoverChange}
+                 onClick={(e) => e.stopPropagation()} 
+             />
+             
+             {/* Camera Icon - Top Right (Publish) */}
              <div 
                 className="absolute top-4 right-4 z-20 cursor-pointer p-2 rounded-full hover:bg-black/10 transition-colors"
-                onClick={() => setShowPostOptions(!showPostOptions)}
+                onClick={(e) => {
+                    e.stopPropagation(); // Stop bubbling to cover change
+                    setShowPostOptions(!showPostOptions);
+                }}
                 title="发布"
              >
                  <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="rgba(0,0,0,0.2)" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-md">
@@ -691,13 +796,19 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
              {/* Dropdown Menu */}
              {showPostOptions && (
                 <>
-                    <div className="fixed inset-0 z-30" onClick={() => setShowPostOptions(false)}></div>
-                    <div className="absolute top-14 right-4 bg-[#4c4c4c] text-white rounded-md shadow-lg z-40 py-1 w-32 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="fixed inset-0 z-30" onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPostOptions(false);
+                    }}></div>
+                    <div 
+                        className="absolute top-14 right-4 bg-[#4c4c4c] text-white rounded-md shadow-lg z-40 py-1 w-32 animate-in fade-in zoom-in-95 duration-100"
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div 
                             className="px-4 py-3 hover:bg-[#5f5f5f] cursor-pointer text-sm border-b border-[#5f5f5f]"
                             onClick={() => {
                                 setShowPostOptions(false);
-                                handlePostMoment(); // Existing manual post
+                                handlePostMoment();
                             }}
                         >
                             拍摄
@@ -719,34 +830,23 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
          {/* User Info Overlay */}
          <div className="absolute bottom-[-30px] right-4 flex items-start gap-4 justify-end w-full px-4">
              <div className="flex-1 text-right pt-2">
-                 <div className="text-white font-bold text-lg drop-shadow-md mb-1 cursor-pointer" onClick={() => setViewingUser(currentUser || { name: 'User', avatar: '' })}>{currentUser?.name || 'User'}</div>
+                 <div 
+                    className="text-white font-bold text-lg drop-shadow-md mb-1 cursor-pointer hover:opacity-90" 
+                    onClick={handleOpenEditProfile}
+                    title="点击修改资料"
+                >
+                    {currentUser?.name || 'User'}
+                </div>
              </div>
              
-             {/* Avatar with Edit Overlay */}
+             {/* Avatar */}
              <div className="relative z-10 group">
                 <img 
                    src={currentUser?.avatar || "https://picsum.photos/seed/me/100/100"} 
-                   className="w-20 h-20 rounded-xl border-2 border-white bg-gray-100 object-cover shadow-sm cursor-pointer"
+                   className="w-20 h-20 rounded-xl border-2 border-white bg-gray-100 object-cover shadow-sm cursor-pointer hover:opacity-95"
                    alt="Avatar"
-                   onClick={() => setViewingUser(currentUser || { name: 'User', avatar: '' })}
-                />
-                {/* Edit Button */}
-                <div 
-                    className="absolute bottom-0 right-0 bg-black/60 p-1.5 rounded-br-xl rounded-tl-lg cursor-pointer hover:bg-black/80 transition-colors backdrop-blur-sm"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        avatarInputRef.current?.click();
-                    }}
-                    title="更换头像"
-                >
-                     <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                </div>
-                <input 
-                    type="file" 
-                    ref={avatarInputRef} 
-                    className="hidden" 
-                    accept="image/*" 
-                    onChange={handleAvatarFileChange} 
+                   onClick={handleOpenEditProfile}
+                   title="点击修改资料"
                 />
              </div>
          </div>
@@ -754,87 +854,106 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
 
       {/* Feed List */}
       <div className="max-w-2xl mx-auto px-4 pb-20 pt-4">
-          {posts.map(post => (
-              <div key={post.id} className="flex gap-3 mb-8 border-b border-gray-50 pb-6 last:border-0">
-                  <img 
-                    src={post.user.avatar} 
-                    className="w-10 h-10 rounded-md bg-gray-200 object-cover flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity" 
-                    alt="Avatar"
-                    onClick={() => setViewingUser(post.user)}
-                  />
-                  <div className="flex-1 min-w-0">
-                      <div 
-                        className="text-[#576b95] font-bold text-[15px] mb-1 leading-tight truncate cursor-pointer hover:underline"
-                        onClick={() => setViewingUser(post.user)}
-                      >
-                          {post.user.name}
-                      </div>
-                      <div 
-                        className="cursor-pointer"
-                        onClick={() => setViewingPost(post)}
-                      >
-                          {post.content && (
-                              <div className="text-[15px] text-gray-900 mb-2 leading-normal whitespace-pre-wrap">{post.content}</div>
-                          )}
-                          
-                          {/* Image Grid */}
-                          {post.images.length > 0 && (
-                              <div className={`grid gap-1.5 mb-2 ${
-                                  post.images.length === 1 ? 'grid-cols-1 max-w-[200px]' : 
-                                  post.images.length === 2 || post.images.length === 4 ? 'grid-cols-2 max-w-[200px]' : 
-                                  'grid-cols-3 max-w-[280px]'
-                              }`}>
-                                  {post.images.map((img, idx) => (
-                                      <div key={idx} className={`aspect-square bg-gray-100 overflow-hidden ${post.images.length === 1 ? 'aspect-auto' : ''}`}>
-                                          <img src={img} className="w-full h-full object-cover" alt={`Img ${idx}`} />
-                                      </div>
-                                  ))}
-                              </div>
-                          )}
-                      </div>
-                      
-                      {/* Footer Info */}
-                      <div className="flex items-center justify-between text-xs text-gray-400 mt-2 relative h-5 mb-1">
-                          <span>{post.time}</span>
-                          <div className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors">
-                             •••
-                          </div>
-                      </div>
-
-                      {/* Likes and Comments Section */}
-                      {(post.likes.length > 0 || post.comments.length > 0) && (
-                          <div className="bg-[#f7f7f7] rounded-[4px] mt-2 text-[14px] leading-6 p-2 relative">
-                               {/* Triangle Pointer */}
-                               <div className="absolute -top-1.5 left-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#f7f7f7]"></div>
-
-                               {/* Likes */}
-                               {post.likes.length > 0 && (
-                                   <div className="flex flex-wrap items-center gap-1 border-b border-gray-200/50 pb-1 mb-1">
-                                       <svg className="w-3.5 h-3.5 text-[#576b95]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
-                                       {post.likes.map((like, i) => (
-                                           <span key={i} className="text-[#576b95] font-medium cursor-pointer hover:underline">
-                                               {like.name}{i < post.likes.length - 1 ? '，' : ''}
-                                           </span>
-                                       ))}
-                                   </div>
-                               )}
-                               
-                               {/* Comments */}
-                               {post.comments.map((comment, i) => (
-                                   <div key={i} className="text-gray-900">
-                                       <span className="text-[#576b95] font-medium cursor-pointer hover:underline">{comment.name}</span>
-                                       <span className="text-gray-900">: {comment.content}</span>
-                                   </div>
-                               ))}
-                          </div>
-                      )}
+          {posts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center animate-in fade-in zoom-in duration-300">
+                  <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+                      <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                   </div>
+                  <h3 className="text-gray-900 font-medium text-lg mb-2">朋友圈空空如也</h3>
+                  <p className="text-gray-500 text-sm max-w-xs leading-relaxed mb-8">
+                      点击封面图上的 <span className="inline-flex items-center justify-center bg-gray-100 rounded px-1.5 py-0.5 mx-1"><svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></span> 图标发布动态。
+                      <br/><br/>
+                      💡 <b>提示：</b> 使用 <b>"AI 自动生成"</b> 功能，可以一键模拟好友们的日常动态，让这里瞬间热闹起来！
+                  </p>
+                  <button 
+                      onClick={() => setShowAiPostModal(true)}
+                      className="px-6 py-2.5 bg-[#07c160] text-white rounded-lg font-medium hover:bg-[#06ad56] transition-colors shadow-sm text-sm flex items-center gap-2"
+                  >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                      立即体验 AI 模拟朋友圈
+                  </button>
               </div>
-          ))}
-          
-          <div className="py-8 text-center text-xs text-gray-400 border-t border-gray-100 mt-8">
-              <span className="relative px-2 bg-white">朋友仅展示最近三天的朋友圈</span>
-          </div>
+          ) : (
+              <>
+                {posts.map(post => (
+                    <div key={post.id} className="flex gap-3 mb-8 border-b border-gray-50 pb-6 last:border-0">
+                        <img 
+                            src={post.user.avatar} 
+                            className="w-10 h-10 rounded-md bg-gray-200 object-cover flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity" 
+                            alt="Avatar"
+                            onClick={() => setViewingUser(post.user)}
+                        />
+                        <div className="flex-1 min-w-0">
+                            <div 
+                                className="text-[#576b95] font-bold text-[15px] mb-1 leading-tight truncate cursor-pointer hover:underline"
+                                onClick={() => setViewingUser(post.user)}
+                            >
+                                {post.user.name}
+                            </div>
+                            <div 
+                                className="cursor-pointer"
+                                onClick={() => setViewingPost(post)}
+                            >
+                                {post.content && (
+                                    <div className="text-[15px] text-gray-900 mb-2 leading-normal whitespace-pre-wrap">{post.content}</div>
+                                )}
+                                
+                                {/* Image Grid */}
+                                {post.images.length > 0 && (
+                                    <div className={`grid gap-1.5 mb-2 ${
+                                        post.images.length === 1 ? 'grid-cols-1 max-w-[200px]' : 
+                                        post.images.length === 2 || post.images.length === 4 ? 'grid-cols-2 max-w-[200px]' : 
+                                        'grid-cols-3 max-w-[280px]'
+                                    }`}>
+                                        {post.images.map((img, idx) => (
+                                            <div key={idx} className={`aspect-square bg-gray-100 overflow-hidden ${post.images.length === 1 ? 'aspect-auto' : ''}`}>
+                                                <img src={img} className="w-full h-full object-cover" alt={`Img ${idx}`} />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Footer Info */}
+                            <div className="flex items-center justify-between text-xs text-gray-400 mt-2 relative h-5 mb-1">
+                                <span>{post.time}</span>
+                                <div className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors">
+                                    •••
+                                </div>
+                            </div>
+
+                            {/* Likes and Comments Section */}
+                            {(post.likes.length > 0 || post.comments.length > 0) && (
+                                <div className="bg-[#f7f7f7] rounded-[4px] mt-2 text-[14px] leading-6 p-2 relative">
+                                    {/* Triangle Pointer */}
+                                    <div className="absolute -top-1.5 left-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#f7f7f7]"></div>
+
+                                    {/* Likes */}
+                                    {post.likes.length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-1 border-b border-gray-200/50 pb-1 mb-1">
+                                            <svg className="w-3.5 h-3.5 text-[#576b95]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                                            {post.likes.map((like, i) => (
+                                                <span key={i} className="text-[#576b95] font-medium cursor-pointer hover:underline">
+                                                    {like.name}{i < post.likes.length - 1 ? ', ' : ''}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    
+                                    {/* Comments */}
+                                    {post.comments.map((comment, i) => (
+                                        <div key={i} className="text-gray-900">
+                                            <span className="text-[#576b95] font-medium cursor-pointer hover:underline">{comment.name}</span>
+                                            <span className="text-gray-900">: {comment.content}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+            </>
+          )}
       </div>
 
       {/* AI Post Modal */}
@@ -954,6 +1073,148 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                   </div>
               </div>
           </div>
+      )}
+
+      {/* Edit Profile Modal */}
+      {showEditProfileModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center backdrop-blur-sm p-4">
+              <div className="bg-white rounded-lg w-full max-w-sm overflow-hidden animate-in zoom-in duration-200 shadow-2xl p-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-6 text-center">编辑个人资料</h3>
+                  
+                  <div className="flex flex-col items-center mb-6">
+                      <div 
+                        className="relative group cursor-pointer w-20 h-20" 
+                        onClick={() => editAvatarInputRef.current?.click()}
+                      >
+                          <img 
+                              src={editAvatar || "https://picsum.photos/seed/me/100/100"} 
+                              className="w-full h-full rounded-xl object-cover border border-gray-200 shadow-sm" 
+                              alt="Avatar Preview"
+                          />
+                          <div className="absolute inset-0 bg-black bg-opacity-30 rounded-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                          </div>
+                      </div>
+                      <input 
+                          type="file" 
+                          ref={editAvatarInputRef} 
+                          className="hidden" 
+                          accept="image/*" 
+                          onChange={handleEditAvatarChange} 
+                      />
+                      <button 
+                        className="text-xs text-blue-600 mt-2 hover:underline"
+                        onClick={() => editAvatarInputRef.current?.click()}
+                      >
+                        点击更换头像
+                      </button>
+                  </div>
+
+                  <div className="mb-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">昵称</label>
+                      <input 
+                          type="text" 
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#07c160] focus:border-transparent"
+                          placeholder="请输入昵称"
+                      />
+                  </div>
+
+                  <div className="flex justify-end gap-3">
+                      <button 
+                          onClick={() => setShowEditProfileModal(false)}
+                          className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                      >
+                          取消
+                      </button>
+                      <button 
+                          onClick={handleSaveProfile}
+                          disabled={!editName.trim()}
+                          className="px-6 py-2 text-sm bg-[#07c160] text-white rounded hover:bg-[#06ad56] transition-colors shadow-sm disabled:opacity-50"
+                      >
+                          保存
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+      
+      {/* Cover Menu Modal */}
+      {showCoverMenu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => setShowCoverMenu(false)}>
+            <div className="bg-white w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                <div className="p-4 border-b border-gray-100 text-center relative">
+                    <h3 className="font-medium text-gray-900">更换封面图</h3>
+                    <button 
+                        onClick={() => setShowCoverMenu(false)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                
+                <div className="p-6 space-y-6">
+                    {/* Option 1: Upload */}
+                    <button 
+                        onClick={() => {
+                            coverInputRef.current?.click();
+                            setShowCoverMenu(false);
+                        }}
+                        className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-all group"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm text-gray-600 group-hover:text-blue-600 group-hover:scale-110 transition-all">
+                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            </div>
+                            <div className="text-left">
+                                <div className="text-sm font-bold text-gray-900">上传本地图片</div>
+                                <div className="text-xs text-gray-500">从相册选择</div>
+                            </div>
+                        </div>
+                        <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                    </button>
+
+                    {/* Divider */}
+                    <div className="relative flex py-1 items-center">
+                        <div className="flex-grow border-t border-gray-100"></div>
+                        <span className="flex-shrink-0 mx-4 text-xs text-gray-300">OR</span>
+                        <div className="flex-grow border-t border-gray-100"></div>
+                    </div>
+
+                    {/* Option 2: AI */}
+                    <div className="bg-gradient-to-br from-purple-50 to-indigo-50 p-4 rounded-xl border border-purple-100">
+                        <div className="flex items-center gap-2 mb-3">
+                             <div className="w-6 h-6 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
+                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                             </div>
+                             <span className="text-sm font-bold text-purple-900">AI 创意生成</span>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={aiCoverPrompt}
+                                onChange={(e) => setAiCoverPrompt(e.target.value)}
+                                placeholder="输入关键词 (如: 极光, 赛博朋克...)"
+                                className="flex-1 text-sm border border-purple-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAiGenerateCover()}
+                            />
+                            <button 
+                                onClick={handleAiGenerateCover}
+                                disabled={isGeneratingCover || !aiCoverPrompt}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm hover:bg-purple-700 disabled:opacity-50 font-medium shadow-sm flex items-center gap-1"
+                            >
+                                {isGeneratingCover ? (
+                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                ) : '生成'}
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-purple-400 mt-2">✨ 描述你想看到的画面，AI 将为你绘制独一无二的封面。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );
