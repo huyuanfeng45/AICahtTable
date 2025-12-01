@@ -434,7 +434,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
           >
               <button 
                   onClick={() => handleLike(post)}
-                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px]"
+                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
               >
                   <svg className="w-5 h-5" fill={isLiked ? "#eb4d4b" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                       {isLiked ? (
@@ -448,7 +448,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
               <div className="w-[1px] h-5 bg-[#3b3b3b]"></div>
               <button 
                   onClick={() => handleCommentClick(post.id)}
-                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px]"
+                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
               >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
@@ -980,7 +980,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                 }}
                 title="发布"
              >
-                 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="rgba(0,0,0,0.2)" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-md">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
                     <circle cx="12" cy="13" r="4"></circle>
                  </svg>
