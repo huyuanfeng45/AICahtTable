@@ -9,13 +9,15 @@ interface MomentsViewProps {
   currentUser: UserProfile | null;
   posts: MomentPost[];
   onUpdatePosts: (posts: MomentPost[]) => void;
+  onUpdateUser?: (updates: Partial<UserProfile>) => void;
 }
 
-const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdatePosts }) => {
+const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdatePosts, onUpdateUser }) => {
   const [isPosting, setIsPosting] = useState(false);
   const [postText, setPostText] = useState('');
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // AI Config State
   const [showAiConfig, setShowAiConfig] = useState(false);
@@ -207,6 +209,25 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       });
     }
     e.target.value = ''; 
+  };
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.size > 2 * 1024 * 1024) {
+              alert("图片大小不能超过 2MB");
+              return;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              const result = ev.target?.result as string;
+              if (result && onUpdateUser) {
+                  onUpdateUser({ avatar: result });
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+      if (e.target) e.target.value = '';
   };
   
   const handleDeletePost = (postId: number) => {
@@ -700,12 +721,34 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
              <div className="flex-1 text-right pt-2">
                  <div className="text-white font-bold text-lg drop-shadow-md mb-1 cursor-pointer" onClick={() => setViewingUser(currentUser || { name: 'User', avatar: '' })}>{currentUser?.name || 'User'}</div>
              </div>
-             <img 
-                src={currentUser?.avatar || "https://picsum.photos/seed/me/100/100"} 
-                className="w-20 h-20 rounded-xl border-2 border-white bg-gray-100 object-cover shadow-sm z-10 cursor-pointer"
-                alt="Avatar"
-                onClick={() => setViewingUser(currentUser || { name: 'User', avatar: '' })}
-             />
+             
+             {/* Avatar with Edit Overlay */}
+             <div className="relative z-10 group">
+                <img 
+                   src={currentUser?.avatar || "https://picsum.photos/seed/me/100/100"} 
+                   className="w-20 h-20 rounded-xl border-2 border-white bg-gray-100 object-cover shadow-sm cursor-pointer"
+                   alt="Avatar"
+                   onClick={() => setViewingUser(currentUser || { name: 'User', avatar: '' })}
+                />
+                {/* Edit Button */}
+                <div 
+                    className="absolute bottom-0 right-0 bg-black/60 p-1.5 rounded-br-xl rounded-tl-lg cursor-pointer hover:bg-black/80 transition-colors backdrop-blur-sm"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        avatarInputRef.current?.click();
+                    }}
+                    title="更换头像"
+                >
+                     <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                </div>
+                <input 
+                    type="file" 
+                    ref={avatarInputRef} 
+                    className="hidden" 
+                    accept="image/*" 
+                    onChange={handleAvatarFileChange} 
+                />
+             </div>
          </div>
       </div>
 

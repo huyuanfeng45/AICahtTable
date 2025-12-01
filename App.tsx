@@ -573,6 +573,51 @@ const App: React.FC = () => {
     };
     localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
   };
+  
+  const handleUpdateUserProfile = async (updates: Partial<UserProfile>) => {
+    if (!currentUser) return;
+    
+    // Update local state
+    const updatedUser = { ...currentUser, ...updates };
+    setCurrentUser(updatedUser);
+    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+
+    // Update Settings State (since it tracks avatar/name)
+    const newSettings: AppSettings = {
+        ...settings,
+        userAvatar: updatedUser.avatar,
+        userName: updatedUser.name
+    };
+    setSettings(newSettings);
+    
+    // Persist settings locally
+    const globalConfigToSave = {
+        providerConfigs: newSettings.providerConfigs,
+        activeProvider: newSettings.activeProvider,
+        geminiModel: newSettings.geminiModel,
+        enableThinking: newSettings.enableThinking,
+        bannedIps: newSettings.bannedIps,
+        ossConfig: newSettings.ossConfig,
+        notificationConfig: newSettings.notificationConfig
+    };
+    localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
+
+    // Sync to Cloud
+    if (newSettings.ossConfig?.enabled) {
+        try {
+             const updatedUsersList = users.map(u => u.id === updatedUser.id ? updatedUser : u);
+             await uploadGlobalConfig(
+                 newSettings, 
+                 personas, 
+                 updatedUsersList, 
+                 adminCredentials, 
+                 updatedUser.name
+             );
+        } catch (e) {
+            console.error("Cloud sync failed", e);
+        }
+    }
+  }
 
   // --- Admin User Management Handlers ---
   
@@ -888,6 +933,7 @@ const App: React.FC = () => {
                     currentUser={currentUser} 
                     posts={moments}
                     onUpdatePosts={setMoments}
+                    onUpdateUser={handleUpdateUserProfile}
                  />
             </div>
          ) : activeSidebarTab === 'changelog' ? (
