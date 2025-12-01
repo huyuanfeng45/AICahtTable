@@ -2,16 +2,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, AppSettings, MomentPost, MomentLike, MomentComment } from '../types';
 import { generateMomentInteractions, generateMomentPost } from '../services/geminiService';
-import { DEFAULT_APP_SETTINGS } from '../constants';
 
 interface MomentsViewProps {
   currentUser: UserProfile | null;
   posts: MomentPost[];
   onUpdatePosts: (posts: MomentPost[]) => void;
   onUpdateUser?: (updates: Partial<UserProfile>) => void;
+  settings: AppSettings;
 }
 
-const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdatePosts, onUpdateUser }) => {
+const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdatePosts, onUpdateUser, settings }) => {
   const [isPosting, setIsPosting] = useState(false);
   const [postText, setPostText] = useState('');
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
@@ -59,18 +59,6 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const [commentingPostId, setCommentingPostId] = useState<number | null>(null);
   const [commentInput, setCommentInput] = useState('');
   const commentInputRef = useRef<HTMLInputElement>(null);
-
-  // Load settings for API calls
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
-  useEffect(() => {
-      const saved = localStorage.getItem('app_global_settings');
-      if (saved) {
-          try {
-             const parsed = JSON.parse(saved);
-             setSettings(prev => ({ ...prev, ...parsed }));
-          } catch(e) {}
-      }
-  }, []);
 
   // Close menu when clicking outside
   useEffect(() => {

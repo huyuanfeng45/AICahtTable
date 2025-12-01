@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -934,6 +933,7 @@ const App: React.FC = () => {
                     posts={moments}
                     onUpdatePosts={setMoments}
                     onUpdateUser={handleUpdateUserProfile}
+                    settings={settings}
                  />
             </div>
          ) : activeSidebarTab === 'changelog' ? (
