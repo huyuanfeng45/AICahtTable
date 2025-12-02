@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { UserProfile, AppSettings, MomentPost, MomentLike, MomentComment } from '../types';
 import { generateMomentInteractions, generateMomentPost } from '../services/geminiService';
@@ -61,8 +62,21 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const commentInputRef = useRef<HTMLInputElement>(null);
   const [showDetailEmoji, setShowDetailEmoji] = useState(false);
 
-  // Intro Modal State
-  const [showIntroModal, setShowIntroModal] = useState(true);
+  // Intro Modal State (Persisted in Session)
+  const [showIntroModal, setShowIntroModal] = useState(() => {
+    try {
+        return !sessionStorage.getItem('hasSeenMomentsIntro');
+    } catch {
+        return true;
+    }
+  });
+
+  const handleCloseIntro = () => {
+    setShowIntroModal(false);
+    try {
+        sessionStorage.setItem('hasSeenMomentsIntro', 'true');
+    } catch {}
+  };
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -416,42 +430,6 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       setShowDetailEmoji(false);
   };
 
-  // --- Helper: Menu Component for Reusability ---
-  const InteractionMenu = ({ post }: { post: MomentPost }) => {
-      const isLiked = post.likes.some(l => l.name === (currentUser?.name || '我'));
-      
-      return (
-          <div 
-             className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-20"
-             onClick={(e) => e.stopPropagation()}
-          >
-              <button 
-                  onClick={() => handleLike(post)}
-                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
-              >
-                  <svg className="w-5 h-5" fill={isLiked ? "#eb4d4b" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                      {isLiked ? (
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" fill="#eb4d4b" stroke="none"></path>
-                      ) : (
-                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                      )}
-                  </svg>
-                  <span className="ml-1.5 text-[14px] font-medium">{isLiked ? '取消' : '赞'}</span>
-              </button>
-              <div className="w-[1px] h-5 bg-[#3b3b3b]"></div>
-              <button 
-                  onClick={() => handleCommentClick(post.id)}
-                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
-              >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
-                  </svg>
-                  <span className="ml-1.5 text-[14px] font-medium">评论</span>
-              </button>
-          </div>
-      );
-  };
-
   // --- View: Post Detail ---
   if (viewingPost) {
       return (
@@ -528,7 +506,36 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                   </div>
                                   
                                   <div className="relative">
-                                      {activeMenuPostId === viewingPost.id && <InteractionMenu post={viewingPost} />}
+                                      {activeMenuPostId === viewingPost.id && (
+                                          <div 
+                                             className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-20"
+                                             onClick={(e) => e.stopPropagation()}
+                                          >
+                                              <button 
+                                                  onClick={() => handleLike(viewingPost)}
+                                                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
+                                              >
+                                                  <svg className="w-5 h-5" fill={viewingPost.likes.some(l => l.name === currentUser?.name) ? "#eb4d4b" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                                                      {viewingPost.likes.some(l => l.name === currentUser?.name) ? (
+                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" fill="#eb4d4b" stroke="none"></path>
+                                                      ) : (
+                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                                                      )}
+                                                  </svg>
+                                                  <span className="ml-1.5 text-[14px] font-medium">{viewingPost.likes.some(l => l.name === currentUser?.name) ? '取消' : '赞'}</span>
+                                              </button>
+                                              <div className="w-[1px] h-5 bg-[#3b3b3b]"></div>
+                                              <button 
+                                                  onClick={() => handleCommentClick(viewingPost.id)}
+                                                  className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
+                                              >
+                                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                                  </svg>
+                                                  <span className="ml-1.5 text-[14px] font-medium">评论</span>
+                                              </button>
+                                          </div>
+                                      )}
                                       <div 
                                         className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors"
                                         onClick={(e) => {
@@ -572,7 +579,6 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                            {viewingPost.comments.length > 0 ? (
                                <div className="flex items-start">
                                     <div className="w-6 flex-shrink-0 pt-1">
-                                        {/* Updated to Speech Bubble Icon */}
                                         <svg className="w-5 h-5 text-[#576b95]" fill="currentColor" viewBox="0 0 24 24">
                                             <path fillRule="evenodd" d="M20 4H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h4l4 4 4-4h4c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 16V6h16v10H4z" clipRule="evenodd"/>
                                         </svg>
@@ -640,7 +646,6 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                <EmojiPicker 
                                   onSelect={(emoji) => {
                                       setCommentInput(prev => prev + emoji);
-                                      // Keep focus?
                                   }}
                                   onClose={() => setShowDetailEmoji(false)}
                                   position="right"
@@ -674,9 +679,10 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   // --- View: Post Editor ---
   if (isPosting) {
       return (
-          <div className="flex-1 h-full bg-white flex flex-col z-50 absolute inset-0 md:static animate-in fade-in slide-in-from-bottom-4 duration-200">
+          // Fixed positioning on mobile to ensure it sits on top and has height
+          <div className="fixed inset-0 z-[100] bg-white md:static md:z-auto md:inset-auto md:flex md:flex-col md:flex-1 h-full w-full flex flex-col animate-in fade-in slide-in-from-bottom-10 duration-200">
               {/* Header */}
-              <div className="h-[56px] flex items-center justify-between px-4 bg-white relative">
+              <div className="h-[56px] flex items-center justify-between px-4 bg-white relative shadow-sm z-10">
                   <button 
                     onClick={handleCancelPost} 
                     className="text-gray-900 text-[16px] font-normal hover:bg-gray-100 px-2 py-1 -ml-2 rounded transition-colors"
@@ -694,7 +700,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                   </button>
               </div>
               
-              <div className="flex-1 overflow-y-auto pt-4 pb-12 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto pt-4 pb-12 custom-scrollbar bg-white">
                   <textarea 
                       className="w-full min-h-[120px] text-[16px] placeholder-gray-400 focus:outline-none resize-none leading-relaxed px-6"
                       placeholder="这一刻的想法..."
@@ -977,19 +983,19 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
 
       {/* Intro Modal (New) */}
        {showIntroModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => setShowIntroModal(false)}>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={handleCloseIntro}>
               <div className="bg-white w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                   <div className="p-5 text-center border-b border-gray-100">
                       <h3 className="font-bold text-lg text-gray-900">朋友圈模拟集赞器</h3>
                   </div>
                   <div className="p-6 space-y-4 text-[15px] text-gray-700 leading-relaxed">
-                      <p>1. 朋友圈<span className="text-[#e04a4a] font-bold mx-1">仅自己可见</span>。</p>
-                      <p>2. 右上角📷图标<span className="text-[#e04a4a] font-bold mx-1">「AI 自动生成」</span>用于丰富朋友圈用，AI生成图片约1分钟显示。</p>
-                      <p>3. 自己发布内容需要打开<span className="text-[#e04a4a] font-bold mx-1">「AI 氛围组」</span>，赞数根据需求选择。</p>
+                      <p>1. 朋友圈 <span className="text-[#e04a4a] font-bold mx-1">仅自己可见</span>。</p>
+                      <p>2. 右上角📷图标 <span className="text-[#e04a4a] font-bold mx-1">「AI 自动生成」</span> 用于丰富朋友圈用，AI生成图片约1分钟显示。</p>
+                      <p>3. 自己发布内容需要打开 <span className="text-[#e04a4a] font-bold mx-1">「AI 氛围组」</span>，赞数根据需求选择。</p>
                   </div>
                   <div className="p-4 bg-gray-50 flex justify-center border-t border-gray-100">
                       <button 
-                          onClick={() => setShowIntroModal(false)}
+                          onClick={handleCloseIntro}
                           className="w-full py-2.5 bg-[#07c160] text-white rounded-lg font-medium hover:bg-[#06ad56] transition-colors shadow-sm"
                       >
                           我知道了
@@ -1067,7 +1073,36 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                 
                                 <div className="relative">
                                     {/* Interaction Menu */}
-                                    {activeMenuPostId === post.id && <InteractionMenu post={post} />}
+                                    {activeMenuPostId === post.id && (
+                                        <div 
+                                           className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-20"
+                                           onClick={(e) => e.stopPropagation()}
+                                        >
+                                            <button 
+                                                onClick={() => handleLike(post)}
+                                                className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
+                                            >
+                                                <svg className="w-5 h-5" fill={post.likes.some(l => l.name === currentUser?.name) ? "#eb4d4b" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                                                    {post.likes.some(l => l.name === currentUser?.name) ? (
+                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" fill="#eb4d4b" stroke="none"></path>
+                                                    ) : (
+                                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                                                    )}
+                                                </svg>
+                                                <span className="ml-1.5 text-[14px] font-medium">{post.likes.some(l => l.name === currentUser?.name) ? '取消' : '赞'}</span>
+                                            </button>
+                                            <div className="w-[1px] h-5 bg-[#3b3b3b]"></div>
+                                            <button 
+                                                onClick={() => handleCommentClick(post.id)}
+                                                className="flex items-center justify-center px-4 py-2 hover:bg-[#5c5c5c] transition-colors min-w-[70px] whitespace-nowrap"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                                                </svg>
+                                                <span className="ml-1.5 text-[14px] font-medium">评论</span>
+                                            </button>
+                                        </div>
+                                    )}
                                     
                                     <div 
                                         className="bg-[#f7f7f7] px-2 rounded-[4px] text-[#576b95] font-bold tracking-widest cursor-pointer hover:bg-gray-200 transition-colors"
