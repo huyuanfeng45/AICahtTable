@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -137,16 +135,26 @@ const App: React.FC = () => {
   // Ref for debounced save
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // --- Apply App Icon (Favicon) ---
+  // --- Apply App Icon (Favicon & Apple Touch Icon) ---
   useEffect(() => {
     if (settings.appIcon) {
+        // 1. Standard Favicon
         let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
         if (!link) {
             link = document.createElement('link');
             link.rel = 'icon';
-            document.getElementsByTagName('head')[0].appendChild(link);
+            document.head.appendChild(link);
         }
         link.href = settings.appIcon;
+
+        // 2. iOS Home Screen Icon (Apple Touch Icon)
+        let appleLink = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+        if (!appleLink) {
+            appleLink = document.createElement('link');
+            appleLink.rel = 'apple-touch-icon';
+            document.head.appendChild(appleLink);
+        }
+        appleLink.href = settings.appIcon;
     }
   }, [settings.appIcon]);
 
