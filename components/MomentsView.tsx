@@ -97,6 +97,9 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   // Navigation State
   const [viewingUser, setViewingUser] = useState<{name: string, avatar: string} | null>(null);
   const [viewingPost, setViewingPost] = useState<MomentPost | null>(null);
+  
+  // Image Viewer State (Lightbox)
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   // Interaction State (Menu & Comments)
   const [activeMenuPostId, setActiveMenuPostId] = useState<number | null>(null);
@@ -581,7 +584,14 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                       'grid-cols-3 max-w-[280px]'
                                   }`}>
                                       {viewingPost.images.map((img, idx) => (
-                                          <div key={idx} className={`aspect-square bg-gray-100 overflow-hidden ${viewingPost.images.length === 1 ? 'aspect-auto' : ''}`}>
+                                          <div 
+                                            key={idx} 
+                                            className={`aspect-square bg-gray-100 overflow-hidden cursor-pointer active:opacity-90 ${viewingPost.images.length === 1 ? 'aspect-auto' : ''}`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setViewingImage(img);
+                                            }}
+                                          >
                                               <img src={img} className="w-full h-full object-cover" alt={`Img ${idx}`} />
                                           </div>
                                       ))}
@@ -607,7 +617,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                   <div className="relative">
                                       {activeMenuPostId === viewingPost.id && (
                                           <div 
-                                             className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-20"
+                                             className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-40"
                                              onClick={(e) => e.stopPropagation()}
                                              data-html2canvas-ignore="true"
                                           >
@@ -781,6 +791,29 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                       </button>
                   )}
               </div>
+              
+              {/* Detail View Image Lightbox Overlay */}
+              {viewingImage && (
+                <div 
+                    className="fixed inset-0 z-[80] bg-black flex items-center justify-center animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingImage(null);
+                    }}
+                >
+                    <img 
+                        src={viewingImage} 
+                        className="max-w-full max-h-full object-contain"
+                        alt="Full view"
+                    />
+                    <button 
+                        onClick={() => setViewingImage(null)}
+                        className="absolute top-4 right-4 text-white/70 hover:text-white"
+                    >
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+              )}
           </div>
       );
   }
@@ -849,7 +882,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                   
                   {/* Options List */}
                   <div className="mt-12 border-t border-gray-100 px-6">
-                      
+                      {/* ...Options code... */}
                       <div className="flex items-center justify-between py-4 border-b border-gray-100 -mx-6 px-6 cursor-pointer active:bg-gray-50 relative">
                           <div className="flex items-center gap-3">
                               <div className="w-6 flex justify-center">
@@ -887,8 +920,8 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                               />
                           </div>
                       </div>
-
-                      <div className="flex items-center justify-between py-4 border-b border-gray-100 cursor-pointer active:bg-gray-50 -mx-6 px-6">
+                      
+                       <div className="flex items-center justify-between py-4 border-b border-gray-100 cursor-pointer active:bg-gray-50 -mx-6 px-6">
                           <div className="flex items-center gap-3">
                               <div className="w-6 flex justify-center">
                                 <svg className="w-6 h-6 text-gray-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -1089,6 +1122,29 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
              </div>
          </div>
       </div>
+      
+      {/* Lightbox Overlay for Feed */}
+      {viewingImage && (
+        <div 
+            className="fixed inset-0 z-[80] bg-black flex items-center justify-center animate-in fade-in duration-200"
+            onClick={(e) => {
+                e.stopPropagation();
+                setViewingImage(null);
+            }}
+        >
+            <img 
+                src={viewingImage} 
+                className="max-w-full max-h-full object-contain"
+                alt="Full view"
+            />
+            <button 
+                onClick={() => setViewingImage(null)}
+                className="absolute top-4 right-4 text-white/70 hover:text-white"
+            >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+      )}
 
       {/* Intro Modal (New) */}
        {showIntroModal && (
@@ -1168,7 +1224,14 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                         'grid-cols-3 max-w-[280px]'
                                     }`}>
                                         {post.images.map((img, idx) => (
-                                            <div key={idx} className={`aspect-square bg-gray-100 overflow-hidden ${post.images.length === 1 ? 'aspect-auto' : ''}`}>
+                                            <div 
+                                                key={idx} 
+                                                className={`aspect-square bg-gray-100 overflow-hidden cursor-pointer active:opacity-90 ${post.images.length === 1 ? 'aspect-auto' : ''}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setViewingImage(img);
+                                                }}
+                                            >
                                                 <img src={img} className="w-full h-full object-cover" alt={`Img ${idx}`} />
                                             </div>
                                         ))}
@@ -1184,7 +1247,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                     {/* Interaction Menu */}
                                     {activeMenuPostId === post.id && (
                                         <div 
-                                           className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-20"
+                                           className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-40"
                                            onClick={(e) => e.stopPropagation()}
                                         >
                                             <button 
