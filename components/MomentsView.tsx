@@ -61,6 +61,9 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const commentInputRef = useRef<HTMLInputElement>(null);
   const [showDetailEmoji, setShowDetailEmoji] = useState(false);
 
+  // Intro Modal State
+  const [showIntroModal, setShowIntroModal] = useState(true);
+
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
@@ -971,6 +974,30 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
              </div>
          </div>
       </div>
+
+      {/* Intro Modal (New) */}
+       {showIntroModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => setShowIntroModal(false)}>
+              <div className="bg-white w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                  <div className="p-5 text-center border-b border-gray-100">
+                      <h3 className="font-bold text-lg text-gray-900">朋友圈模拟集赞器</h3>
+                  </div>
+                  <div className="p-6 space-y-4 text-[15px] text-gray-700 leading-relaxed">
+                      <p>1. 朋友圈<span className="text-[#e04a4a] font-bold mx-1">仅自己可见</span>。</p>
+                      <p>2. 右上角📷图标<span className="text-[#e04a4a] font-bold mx-1">「AI 自动生成」</span>用于丰富朋友圈用，AI生成图片约1分钟显示。</p>
+                      <p>3. 自己发布内容需要打开<span className="text-[#e04a4a] font-bold mx-1">「AI 氛围组」</span>，赞数根据需求选择。</p>
+                  </div>
+                  <div className="p-4 bg-gray-50 flex justify-center border-t border-gray-100">
+                      <button 
+                          onClick={() => setShowIntroModal(false)}
+                          className="w-full py-2.5 bg-[#07c160] text-white rounded-lg font-medium hover:bg-[#06ad56] transition-colors shadow-sm"
+                      >
+                          我知道了
+                      </button>
+                  </div>
+              </div>
+          </div>
+       )}
 
       {/* Feed List */}
       <div className="max-w-2xl mx-auto px-4 pb-20 pt-4">
