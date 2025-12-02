@@ -41,7 +41,8 @@ function loadState<T>(key: string, defaultValue: T): T {
 // Safe Save Helper to prevent QuotaExceededError crashes
 function saveState(key: string, value: any) {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    const serialized = JSON.stringify(value);
+    localStorage.setItem(key, serialized);
   } catch (e) {
     console.error(`Failed to save state for ${key}`, e);
     if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {

@@ -16,7 +16,7 @@ const compressImage = (file: File): Promise<string> => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const MAX_SIZE = 1024; // Limit max dimension
+        const MAX_SIZE = 800; // Reduced from 1024 to 800 for better mobile stability
 
         if (width > height) {
           if (width > MAX_SIZE) {
@@ -38,8 +38,8 @@ const compressImage = (file: File): Promise<string> => {
             return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        // Compress to JPEG 0.7
-        resolve(canvas.toDataURL('image/jpeg', 0.7));
+        // Compress to JPEG 0.6 (Reduced quality for storage safety)
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
       };
       img.onerror = (err) => resolve(e.target?.result as string); // Fallback
     };
@@ -149,28 +149,29 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
     }
   }, [currentUser]);
 
-  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          if (file.size > 10 * 1024 * 1024) {
-              alert("图片大小不能超过 10MB");
+          if (file.size > 15 * 1024 * 1024) {
+              alert("图片大小不能超过 15MB");
               return;
           }
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-              const result = ev.target?.result as string;
-              if (result) {
-                  setCoverImage(result);
-                  if (currentUser) {
-                      try {
-                          localStorage.setItem(`user_cover_${currentUser.id}`, result);
-                      } catch(e) {
-                          console.warn("Cover image too large to save locally");
-                      }
+          
+          try {
+              // Apply compression to cover image as well
+              const result = await compressImage(file);
+              setCoverImage(result);
+              if (currentUser) {
+                  try {
+                      localStorage.setItem(`user_cover_${currentUser.id}`, result);
+                  } catch(e) {
+                      console.warn("Cover image too large to save locally", e);
                   }
               }
-          };
-          reader.readAsDataURL(file);
+          } catch(err) {
+              console.error("Cover image processing failed", err);
+              alert("图片处理失败，请重试");
+          }
       }
       e.target.value = '';
   };
