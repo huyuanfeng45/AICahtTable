@@ -16,7 +16,7 @@ const compressImage = (file: File): Promise<string> => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
-        const MAX_SIZE = 800; // Reduced from 1024 to 800 for better mobile stability
+        const MAX_SIZE = 1024; // Limit max dimension
 
         if (width > height) {
           if (width > MAX_SIZE) {
@@ -38,8 +38,8 @@ const compressImage = (file: File): Promise<string> => {
             return;
         }
         ctx.drawImage(img, 0, 0, width, height);
-        // Compress to JPEG 0.6 (Reduced quality for storage safety)
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
+        // Compress to JPEG 0.7
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
       };
       img.onerror = (err) => resolve(e.target?.result as string); // Fallback
     };
@@ -105,6 +105,10 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const commentInputRef = useRef<HTMLInputElement>(null);
   const [showDetailEmoji, setShowDetailEmoji] = useState(false);
 
+  // Snapshot State
+  const detailViewRef = useRef<HTMLDivElement>(null);
+  const [isSnapshotting, setIsSnapshotting] = useState(false);
+
   // Intro Modal State (Persisted in Session)
   const [showIntroModal, setShowIntroModal] = useState(() => {
     try {
@@ -149,29 +153,28 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
     }
   }, [currentUser]);
 
-  const handleCoverChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          if (file.size > 15 * 1024 * 1024) {
-              alert("图片大小不能超过 15MB");
+          if (file.size > 10 * 1024 * 1024) {
+              alert("图片大小不能超过 10MB");
               return;
           }
-          
-          try {
-              // Apply compression to cover image as well
-              const result = await compressImage(file);
-              setCoverImage(result);
-              if (currentUser) {
-                  try {
-                      localStorage.setItem(`user_cover_${currentUser.id}`, result);
-                  } catch(e) {
-                      console.warn("Cover image too large to save locally", e);
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              const result = ev.target?.result as string;
+              if (result) {
+                  setCoverImage(result);
+                  if (currentUser) {
+                      try {
+                          localStorage.setItem(`user_cover_${currentUser.id}`, result);
+                      } catch(e) {
+                          console.warn("Cover image too large to save locally");
+                      }
                   }
               }
-          } catch(err) {
-              console.error("Cover image processing failed", err);
-              alert("图片处理失败，请重试");
-          }
+          };
+          reader.readAsDataURL(file);
       }
       e.target.value = '';
   };
@@ -411,6 +414,44 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       }
   };
 
+  const handleSnapshot = async () => {
+    if (!detailViewRef.current) return;
+    setIsSnapshotting(true);
+    
+    // Give UI a moment to update/hide tooltips/cursors
+    await new Promise(r => setTimeout(r, 50));
+
+    try {
+        const html2canvas = (window as any).html2canvas;
+        if (!html2canvas) {
+            console.error("html2canvas not loaded");
+            alert("截图组件未加载，请刷新页面重试");
+            return;
+        }
+
+        const canvas = await html2canvas(detailViewRef.current, {
+            useCORS: true,
+            allowTaint: true,
+            scale: 2,
+            backgroundColor: '#ffffff',
+            logging: false
+        });
+
+        const dataUrl = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = `moment_${viewingPost?.id || Date.now()}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    } catch (e) {
+        console.error("Snapshot error", e);
+        alert("截屏失败");
+    } finally {
+        setIsSnapshotting(false);
+    }
+  };
+
   // --- Interaction Logic (Like/Comment) ---
 
   const handleLike = (post: MomentPost) => {
@@ -477,7 +518,20 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   // --- View: Post Detail ---
   if (viewingPost) {
       return (
-          <div className="flex-1 h-full bg-white flex flex-col z-50 absolute inset-0 md:static animate-in slide-in-from-right duration-200">
+          <div ref={detailViewRef} className="flex-1 h-full bg-white flex flex-col z-50 absolute inset-0 md:static animate-in slide-in-from-right duration-200">
+              {/* Snapshot Loading Overlay */}
+              {isSnapshotting && (
+                  <div 
+                    className="absolute inset-0 z-[60] bg-black/20 flex items-center justify-center backdrop-blur-[1px]" 
+                    data-html2canvas-ignore="true"
+                  >
+                      <div className="bg-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 text-sm font-medium">
+                          <svg className="animate-spin h-4 w-4 text-[#07c160]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                          正在生成截图...
+                      </div>
+                  </div>
+              )}
+
               {/* Header */}
               <div className="h-[50px] border-b border-gray-100 flex items-center justify-between px-4 bg-white flex-shrink-0">
                   <button 
@@ -543,6 +597,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                               onClick={() => handleDeletePost(viewingPost.id)}
                                               className="ml-2 p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-red-600 transition-colors"
                                               title="删除"
+                                              data-html2canvas-ignore="true"
                                           >
                                               <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                           </button>
@@ -554,6 +609,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                           <div 
                                              className="absolute right-full top-1/2 -translate-y-1/2 mr-3 bg-[#4c4c4c] text-white rounded-[4px] flex items-center shadow-lg animate-in fade-in zoom-in-95 duration-200 origin-right overflow-hidden z-20"
                                              onClick={(e) => e.stopPropagation()}
+                                             data-html2canvas-ignore="true"
                                           >
                                               <button 
                                                   onClick={() => handleLike(viewingPost)}
@@ -586,6 +642,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                                             e.stopPropagation();
                                             setActiveMenuPostId(activeMenuPostId === viewingPost.id ? null : viewingPost.id);
                                         }}
+                                        data-html2canvas-ignore="true"
                                       >
                                           ••
                                       </div>
@@ -656,7 +713,10 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
               </div>
 
               {/* Bottom Input - Updated Style */}
-              <div className="min-h-[60px] border-t border-gray-100 bg-[#f7f7f7] px-4 flex items-center gap-3 flex-shrink-0 relative z-20">
+              <div 
+                className="min-h-[60px] border-t border-gray-100 bg-[#f7f7f7] px-4 flex items-center gap-3 flex-shrink-0 relative z-20"
+                data-html2canvas-ignore="true"
+              >
                   <div className="flex-1 bg-white rounded-md border border-gray-200 min-h-[40px] flex items-center px-3 py-1 my-2">
                       <input 
                         ref={commentInputRef}
@@ -697,8 +757,13 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                            )}
                       </div>
 
-                      <button className="hover:text-gray-600 transition-colors pt-1">
-                           {/* Image Icon */}
+                      <button 
+                        onClick={handleSnapshot}
+                        disabled={isSnapshotting}
+                        className="hover:text-gray-600 transition-colors pt-1 disabled:opacity-50"
+                        title="保存为图片"
+                      >
+                           {/* Image Icon for Snapshot */}
                           <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                               <circle cx="8.5" cy="8.5" r="1.5"></circle>
@@ -721,6 +786,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   }
 
   // --- View: Post Editor ---
+  // ... (Identical to previous file content for Editor and Main Feed) ...
   if (isPosting) {
       return (
           // Fixed positioning on mobile to ensure it sits on top and has height
@@ -923,8 +989,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       );
   }
 
-  // ... (User Album and Main Feed code remains same as before, no changes needed for this update except preserving them) ...
-  // Re-pasting Main Feed for completeness of file
+  // --- View: Main Feed ---
   return (
     <div className="flex-1 h-full bg-white overflow-y-auto custom-scrollbar relative">
       {/* Cover Header */}
