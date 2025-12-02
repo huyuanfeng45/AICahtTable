@@ -38,6 +38,18 @@ function loadState<T>(key: string, defaultValue: T): T {
   }
 }
 
+// Safe Save Helper to prevent QuotaExceededError crashes
+function saveState(key: string, value: any) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.error(`Failed to save state for ${key}`, e);
+    if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+         console.warn("Local storage quota exceeded. Data could not be saved locally.");
+    }
+  }
+}
+
 // Mock IP Generator
 const generateMockIp = () => {
     return `192.168.${Math.floor(Math.random() * 255)}.${Math.floor(Math.random() * 255)}`;
@@ -126,7 +138,7 @@ const App: React.FC = () => {
   // Persist Current User (Session)
   useEffect(() => {
     if (currentUser) {
-        localStorage.setItem('app_current_user', JSON.stringify(currentUser));
+        saveState('app_current_user', currentUser);
     } else {
         localStorage.removeItem('app_current_user');
     }
@@ -134,7 +146,7 @@ const App: React.FC = () => {
 
   // Persist Admin Credentials on change
   useEffect(() => {
-      localStorage.setItem('app_admin_creds', JSON.stringify(adminCredentials));
+      saveState('app_admin_creds', adminCredentials);
   }, [adminCredentials]);
 
   // Safety Effect: Ensure mobile chat view closes if the selected item is deleted or invalid
@@ -195,13 +207,13 @@ const App: React.FC = () => {
                       // Update Personas
                       if (data.personas) {
                           setPersonas(data.personas);
-                          localStorage.setItem('app_personas', JSON.stringify(data.personas));
+                          saveState('app_personas', data.personas);
                       }
                       
                       // Update Users Registry from Cloud (For Admin Management)
                       if (data.users && Array.isArray(data.users)) {
                           setUsers(data.users);
-                          localStorage.setItem('app_users', JSON.stringify(data.users));
+                          saveState('app_users', data.users);
                       }
 
                       // Update Admin Credentials if present in cloud
@@ -219,7 +231,7 @@ const App: React.FC = () => {
                           ossConfig: settings.ossConfig, // Persist OSS toggle state
                           notificationConfig: newSettings.notificationConfig
                       };
-                      localStorage.setItem('app_global_settings', JSON.stringify(configToSave));
+                      saveState('app_global_settings', configToSave);
                       
                       // Clear status after delay
                       setTimeout(() => setSyncStatus(''), 2000);
@@ -287,7 +299,7 @@ const App: React.FC = () => {
                       // Restore Chat Histories to LocalStorage so ChatWindow can find them
                       if (cloudData.chatHistories) {
                           Object.entries(cloudData.chatHistories).forEach(([chatId, messages]) => {
-                              localStorage.setItem(`chat_msgs_${chatId}`, JSON.stringify(messages));
+                              saveState(`chat_msgs_${chatId}`, messages);
                           });
                       }
 
@@ -363,30 +375,30 @@ const App: React.FC = () => {
 
 
   // Persist Users List
-  useEffect(() => { localStorage.setItem('app_users', JSON.stringify(users)); }, [users]);
+  useEffect(() => { saveState('app_users', users); }, [users]);
   
   // Persist Global Personas
-  useEffect(() => { localStorage.setItem('app_personas', JSON.stringify(personas)); }, [personas]);
+  useEffect(() => { saveState('app_personas', personas); }, [personas]);
 
   // Persist User-Specific Data (Local)
   useEffect(() => { 
-      if(currentUser) localStorage.setItem(`app_chats_${currentUser.id}`, JSON.stringify(chats)); 
+      if(currentUser) saveState(`app_chats_${currentUser.id}`, chats); 
   }, [chats, currentUser]);
 
   useEffect(() => { 
-      if(currentUser) localStorage.setItem(`app_favorites_${currentUser.id}`, JSON.stringify(favorites)); 
+      if(currentUser) saveState(`app_favorites_${currentUser.id}`, favorites); 
   }, [favorites, currentUser]);
 
   useEffect(() => { 
-      if(currentUser) localStorage.setItem(`app_changelogs_${currentUser.id}`, JSON.stringify(changelogs)); 
+      if(currentUser) saveState(`app_changelogs_${currentUser.id}`, changelogs); 
   }, [changelogs, currentUser]);
   
   useEffect(() => { 
-      if(currentUser) localStorage.setItem(`app_moments_${currentUser.id}`, JSON.stringify(moments)); 
+      if(currentUser) saveState(`app_moments_${currentUser.id}`, moments); 
   }, [moments, currentUser]);
   
   useEffect(() => { 
-      if(currentUser) localStorage.setItem(`app_settings_${currentUser.id}`, JSON.stringify(settings)); 
+      if(currentUser) saveState(`app_settings_${currentUser.id}`, settings); 
   }, [settings, currentUser]);
 
 
@@ -570,7 +582,7 @@ const App: React.FC = () => {
         ossConfig: newSettings.ossConfig,
         notificationConfig: newSettings.notificationConfig
     };
-    localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
+    saveState('app_global_settings', globalConfigToSave);
   };
   
   const handleUpdateUserProfile = async (updates: Partial<UserProfile>) => {
@@ -599,7 +611,7 @@ const App: React.FC = () => {
         ossConfig: newSettings.ossConfig,
         notificationConfig: newSettings.notificationConfig
     };
-    localStorage.setItem('app_global_settings', JSON.stringify(globalConfigToSave));
+    saveState('app_global_settings', globalConfigToSave);
 
     // Sync to Cloud
     if (newSettings.ossConfig?.enabled) {

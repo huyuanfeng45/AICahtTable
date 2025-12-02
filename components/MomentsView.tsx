@@ -4,6 +4,49 @@ import { UserProfile, AppSettings, MomentPost, MomentLike, MomentComment } from 
 import { generateMomentInteractions, generateMomentPost } from '../services/geminiService';
 import EmojiPicker from './EmojiPicker';
 
+// Helper for image compression
+const compressImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const MAX_SIZE = 1024; // Limit max dimension
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            resolve(e.target?.result as string); // Fallback
+            return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        // Compress to JPEG 0.7
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = (err) => resolve(e.target?.result as string); // Fallback
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 interface MomentsViewProps {
   currentUser: UserProfile | null;
   posts: MomentPost[];
@@ -109,8 +152,8 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          if (file.size > 5 * 1024 * 1024) {
-              alert("图片大小不能超过 5MB");
+          if (file.size > 10 * 1024 * 1024) {
+              alert("图片大小不能超过 10MB");
               return;
           }
           const reader = new FileReader();
@@ -119,7 +162,11 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
               if (result) {
                   setCoverImage(result);
                   if (currentUser) {
-                      localStorage.setItem(`user_cover_${currentUser.id}`, result);
+                      try {
+                          localStorage.setItem(`user_cover_${currentUser.id}`, result);
+                      } catch(e) {
+                          console.warn("Cover image too large to save locally");
+                      }
                   }
               }
           };
@@ -304,23 +351,25 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
     }
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files: File[] = Array.from(e.target.files);
       const remainingSlots = 9 - selectedImages.length;
       const filesToProcess = files.slice(0, remainingSlots);
 
-      filesToProcess.forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          if (ev.target?.result && typeof ev.target.result === 'string') {
-            setSelectedImages(prev => {
-                if (prev.length >= 9) return prev;
-                return [...prev, ev.target!.result as string];
-            });
+      const processedImages: string[] = [];
+      for (const file of filesToProcess) {
+          try {
+              const compressed = await compressImage(file);
+              processedImages.push(compressed);
+          } catch (err) {
+              console.error("Image processing failed", err);
           }
-        };
-        reader.readAsDataURL(file);
+      }
+
+      setSelectedImages(prev => {
+          if (prev.length >= 9) return prev;
+          return [...prev, ...processedImages];
       });
     }
     e.target.value = ''; 
@@ -332,21 +381,15 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
       setShowEditProfileModal(true);
   };
 
-  const handleEditAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEditAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          if (file.size > 2 * 1024 * 1024) {
-              alert("图片大小不能超过 2MB");
-              return;
+          try {
+              const result = await compressImage(file);
+              setEditAvatar(result);
+          } catch(err) {
+              console.error("Avatar processing failed", err);
           }
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-              const result = ev.target?.result as string;
-              if (result) {
-                  setEditAvatar(result);
-              }
-          };
-          reader.readAsDataURL(file);
       }
       if (e.target) e.target.value = '';
   };
@@ -551,7 +594,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                       </div>
                       
                       {/* Interaction Section (Full Width below content) */}
-                      <div className="bg-[#f7f7f7] rounded-[4px] p-3 relative mt-3">
+                      <div className="bg-[#f7f7f7] rounded-[4px] mt-3 text-[14px] leading-6 p-2 relative">
                            {/* Triangle */}
                            <div className="absolute -top-1.5 left-4 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-[#f7f7f7]"></div>
 
@@ -559,7 +602,7 @@ const MomentsView: React.FC<MomentsViewProps> = ({ currentUser, posts, onUpdateP
                            {viewingPost.likes.length > 0 && (
                                <div className="flex items-start pb-2.5 border-b border-gray-200 mb-2.5">
                                    <div className="w-6 flex-shrink-0 pt-1">
-                                      <svg className="w-5 h-5 text-[#576b95]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                                      <svg className="w-5 h-5 text-[#576b95] mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
                                    </div>
                                    <div className="flex-1 flex flex-wrap gap-1.5">
                                        {viewingPost.likes.map((like, i) => (
