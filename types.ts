@@ -124,6 +124,9 @@ export interface AppSettings {
   activeProvider: ProviderId; // Default/Global provider
   providerConfigs: Record<ProviderId, ProviderConfig>;
   
+  // System Appearance
+  appIcon?: string; // Website Favicon
+
   // Admin Security
   bannedIps: string[];
   

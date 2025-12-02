@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeminiModelId, ProviderId, ProviderConfig, Persona, ModelOption, UserProfile } from '../types';
 import { MODEL_PROVIDERS } from '../constants';
@@ -57,6 +59,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [localEnableThinking, setLocalEnableThinking] = useState(settings.enableThinking);
   const [localMaxReplyLength, setLocalMaxReplyLength] = useState(settings.maxReplyLength || 200);
   const [localActiveProvider, setLocalActiveProvider] = useState<ProviderId>(settings.activeProvider);
+  const [localAppIcon, setLocalAppIcon] = useState(settings.appIcon || '');
   
   // Local state for admin credentials editing
   const [localAdminUsername, setLocalAdminUsername] = useState(adminCredentials.username);
@@ -102,6 +105,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       setLocalEnableThinking(settings.enableThinking);
       setLocalMaxReplyLength(settings.maxReplyLength || 200);
       setLocalActiveProvider(settings.activeProvider);
+      setLocalAppIcon(settings.appIcon || '');
       setLocalProviderConfigs(settings.providerConfigs);
       setLocalPersonas(personas);
       setLocalAdminUsername(adminCredentials.username);
@@ -133,6 +137,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       maxReplyLength: localMaxReplyLength,
       activeProvider: localActiveProvider,
       providerConfigs: localProviderConfigs,
+      appIcon: localAppIcon,
       ossConfig: localOssConfig,
       notificationConfig: localNotificationConfig
     };
@@ -174,6 +179,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           maxReplyLength: localMaxReplyLength,
           activeProvider: localActiveProvider,
           providerConfigs: localProviderConfigs,
+          appIcon: localAppIcon,
           bannedIps: settings.bannedIps,
           ossConfig: localOssConfig,
           notificationConfig: localNotificationConfig
@@ -207,6 +213,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               enableThinking: localEnableThinking,
               ossConfig: localOssConfig,
               notificationConfig: localNotificationConfig,
+              appIcon: localAppIcon,
               userAvatar: localAvatar,
               userName: localUserName
           };
@@ -234,6 +241,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               if (data.appSettings.geminiModel) setLocalGeminiModel(data.appSettings.geminiModel as any);
               if (data.appSettings.enableThinking !== undefined) setLocalEnableThinking(data.appSettings.enableThinking);
               if (data.appSettings.maxReplyLength !== undefined) setLocalMaxReplyLength(data.appSettings.maxReplyLength);
+              if (data.appSettings.appIcon !== undefined) setLocalAppIcon(data.appSettings.appIcon);
               if (data.appSettings.notificationConfig) setLocalNotificationConfig(data.appSettings.notificationConfig);
               if (data.appSettings.userAvatar) setLocalAvatar(data.appSettings.userAvatar);
               if (data.appSettings.userName) setLocalUserName(data.appSettings.userName);
@@ -320,6 +328,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           return;
       }
       await sendBarkNotification("Bark 测试", "这是一条测试消息。如果您收到此消息，说明配置成功。", localNotificationConfig);
+  };
+  
+  const handleAppIconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          if (file.size > 500 * 1024) { // 500KB limit for icon
+              alert("图标文件过大 (请小于 500KB)");
+              return;
+          }
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              if (ev.target?.result) {
+                  setLocalAppIcon(ev.target.result as string);
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+      e.target.value = '';
   };
 
   const handleAddPersona = () => {
@@ -852,14 +878,54 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const renderModelsTab = () => (
     <div className="space-y-6 h-full flex flex-col animate-in fade-in slide-in-from-right-4 duration-300">
-       <h3 className="text-lg font-medium text-gray-900">大模型接入配置 (Admin)</h3>
-       <p className="text-xs text-gray-500 -mt-3">在此配置全局 API Key 和默认参数。所有用户的对话将使用此配置。</p>
+       <h3 className="text-lg font-medium text-gray-900">系统 & 模型配置 (Admin)</h3>
+       <p className="text-xs text-gray-500 -mt-3">配置系统界面、全局参数及大模型接入信息。</p>
        
        <div className="overflow-y-auto custom-scrollbar flex-1 pr-1 space-y-6 pb-6">
+           
+           {/* System Appearance */}
+           <div className="border border-gray-200 bg-gray-50 rounded-lg p-4">
+               <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                   系统界面设置 (System UI)
+               </h4>
+               <div className="flex items-center gap-4">
+                    <div className="flex-shrink-0">
+                        <img 
+                           src={localAppIcon || 'https://www.google.com/s2/favicons?domain=example.com'} 
+                           className="w-10 h-10 rounded border bg-white object-contain p-0.5" 
+                           onError={(e) => e.currentTarget.src = 'https://www.google.com/s2/favicons?domain=example.com'}
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">网页图标 (Favicon)</label>
+                        <div className="flex gap-2">
+                            <label className="cursor-pointer bg-white border border-gray-300 rounded px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">
+                                选择图片
+                                <input 
+                                    type="file" 
+                                    className="hidden" 
+                                    accept="image/png,image/jpeg,image/x-icon" 
+                                    onChange={handleAppIconUpload}
+                                />
+                            </label>
+                            {localAppIcon && (
+                                <button 
+                                    onClick={() => setLocalAppIcon('')}
+                                    className="text-xs text-red-500 hover:text-red-700"
+                                >
+                                    清除
+                                </button>
+                            )}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1">建议尺寸 32x32 或 64x64, 支持 PNG/ICO/JPG. 将自动应用到网页标签页。</p>
+                    </div>
+               </div>
+           </div>
+
            {/* Global Settings */}
            <div className="border border-gray-200 bg-gray-50 rounded-lg p-4">
                <h4 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                   通用生成参数
+                   通用生成参数 (Generation Params)
                </h4>
                <div className="grid grid-cols-2 gap-4">
                    <div>

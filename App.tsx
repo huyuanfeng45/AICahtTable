@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatList from './components/ChatList';
@@ -81,7 +82,8 @@ const App: React.FC = () => {
           // Preserve User Profile if coming from global cache (legacy) or default
           userName: global.userName || DEFAULT_APP_SETTINGS.userName,
           // Notification config is global/admin
-          notificationConfig: global.notificationConfig || DEFAULT_APP_SETTINGS.notificationConfig
+          notificationConfig: global.notificationConfig || DEFAULT_APP_SETTINGS.notificationConfig,
+          appIcon: global.appIcon || DEFAULT_APP_SETTINGS.appIcon
       };
       
       // CRITICAL: Force OSS Config from Environment if present
@@ -134,6 +136,19 @@ const App: React.FC = () => {
 
   // Ref for debounced save
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // --- Apply App Icon (Favicon) ---
+  useEffect(() => {
+    if (settings.appIcon) {
+        let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+        if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+        }
+        link.href = settings.appIcon;
+    }
+  }, [settings.appIcon]);
 
   // Persist Current User (Session)
   useEffect(() => {
@@ -198,6 +213,7 @@ const App: React.FC = () => {
                           enableThinking: data.appSettings.enableThinking ?? settings.enableThinking,
                           bannedIps: data.appSettings.bannedIps || settings.bannedIps,
                           notificationConfig: data.appSettings.notificationConfig || settings.notificationConfig,
+                          appIcon: data.appSettings.appIcon || settings.appIcon,
                           // Sync Profile Data (Global Defaults)
                           userAvatar: data.appSettings.userAvatar || settings.userAvatar,
                           userName: data.appSettings.userName || settings.userName
@@ -229,7 +245,8 @@ const App: React.FC = () => {
                           enableThinking: newSettings.enableThinking,
                           bannedIps: newSettings.bannedIps,
                           ossConfig: settings.ossConfig, // Persist OSS toggle state
-                          notificationConfig: newSettings.notificationConfig
+                          notificationConfig: newSettings.notificationConfig,
+                          appIcon: newSettings.appIcon
                       };
                       saveState('app_global_settings', configToSave);
                       
@@ -278,6 +295,7 @@ const App: React.FC = () => {
               geminiModel: savedGlobalSettings.geminiModel || (savedUserSettings?.geminiModel || DEFAULT_APP_SETTINGS.geminiModel),
               enableThinking: savedGlobalSettings.enableThinking ?? (savedUserSettings?.enableThinking ?? DEFAULT_APP_SETTINGS.enableThinking),
               bannedIps: savedGlobalSettings.bannedIps || [],
+              appIcon: savedGlobalSettings.appIcon || DEFAULT_APP_SETTINGS.appIcon,
               ossConfig: hasEnvOss ? {
                   ...envOssConfig,
                   enabled: true,
@@ -580,7 +598,8 @@ const App: React.FC = () => {
         enableThinking: newSettings.enableThinking,
         bannedIps: newSettings.bannedIps,
         ossConfig: newSettings.ossConfig,
-        notificationConfig: newSettings.notificationConfig
+        notificationConfig: newSettings.notificationConfig,
+        appIcon: newSettings.appIcon
     };
     saveState('app_global_settings', globalConfigToSave);
   };
@@ -609,7 +628,8 @@ const App: React.FC = () => {
         enableThinking: newSettings.enableThinking,
         bannedIps: newSettings.bannedIps,
         ossConfig: newSettings.ossConfig,
-        notificationConfig: newSettings.notificationConfig
+        notificationConfig: newSettings.notificationConfig,
+        appIcon: newSettings.appIcon
     };
     saveState('app_global_settings', globalConfigToSave);
 

@@ -1,3 +1,4 @@
+
 import { Persona, ChatGroup, ModelProvider, GeminiModelId, ProviderId, ProviderConfig, ChangelogEntry, AppSettings, MomentPost } from './types';
 
 export const USER_ID = 'user-me';
@@ -235,6 +236,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   maxReplyLength: 200, // Default limit
   activeProvider: 'gemini',
   providerConfigs: DEFAULT_PROVIDER_CONFIGS,
+  appIcon: '', // Default no custom icon
   bannedIps: [],
   ossConfig: {
     ...ENV_OSS_CONFIG,
